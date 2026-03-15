@@ -26,6 +26,32 @@ Backend çalışırken: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 ---
 
+## Telefonda açma (aynı Wi‑Fi)
+
+Bilgisayarında proje çalışırken, **telefon ve bilgisayar aynı Wi‑Fi’de** olmalı.
+
+1. **Bilgisayarının yerel IP’sini bul**  
+   PowerShell: `ipconfig`  
+   **Wi-Fi** veya **Ethernet** bölümünde **IPv4 Adresi** (örn. `192.168.1.45`).
+
+2. **Backend** (bilgisayarda, 1. terminal):
+   ```powershell
+   cd "proje\BITIRME"
+   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+   ```
+
+3. **Frontend – ağdan erişilebilir** (bilgisayarda, 2. terminal):
+   ```powershell
+   cd "proje\BITIRME\frontend"
+   npm run dev:host
+   ```
+   Çıktıda **Network:** satırında bir adres görünecek (örn. `http://192.168.1.45:5173`).
+
+4. **Telefonda:** Tarayıcıyı aç, bu adresi yaz (örn. `http://192.168.1.45:5173`).  
+   Giriş yapıp uygulamayı kullanabilirsin.
+
+---
+
 ## Projeyi paylaşma
 
 ### 1) GitHub / GitLab ile (önerilen)
@@ -47,26 +73,7 @@ git push -u origin main
 
 ### 2) ZIP ile
 
-**Otomatik (önerilen):** Proje klasöründe (BITIRME) PowerShell açıp şunu çalıştır:
-
-```powershell
-.\ZIP_OLUSTUR.ps1
-```
-
-Masaüstünde `BITIRME_paylasim.zip` oluşur; bunu arkadaşına gönder.
-
-**Elle ZIP alacaksan**, ZIP’e **ekleme** (çıkart):
-
-| Çıkartılacak / eklenmeyecek |
-|-----------------------------|
-| `frontend\node_modules`     |
-| `frontend\dist`            |
-| Tüm `__pycache__` klasörleri |
-| `.venv` veya `venv` (varsa) |
-| `.git` (Git kullanmayacaksa) |
-| `.idea`, `.vscode`, `.cursor` |
-
-Bu klasörler çok yer kaplar; arkadaş kendi bilgisayarında `pip install -r requirements.txt` ve `npm install` ile kuracak.
+Proje klasörünü ZIP’le; `frontend/node_modules`, `__pycache__`, `.venv` ekleme (arkadaş kendi bilgisayarında `pip install` ve `npm install` yapacak). ZIP’i Drive veya e-posta ile gönder.
 
 ### 3) OneDrive ile
 
