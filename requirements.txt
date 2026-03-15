@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pymongo
+pandas
+python-jose
+bcrypt
+bleach
+python-magic
+email-validator
+python-multipart

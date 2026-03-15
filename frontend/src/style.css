@@ -1,0 +1,360 @@
+/* ===== Paws & Care – Design system ===== */
+:root {
+  --primary: #0d9488;
+  --primary-light: #5eead4;
+  --primary-dark: #0f766e;
+  --primary-soft: rgba(13, 148, 136, 0.12);
+  --accent: #f59e0b;
+  --accent-soft: rgba(245, 158, 11, 0.12);
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-warm: #fefdfb;
+  --surface-vet: #f1f5f9;
+  --text: #334155;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --text-heading: #0f172a;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 16px 48px rgba(15, 23, 42, 0.12);
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --transition: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  --sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* App container */
+#app {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  font-family: var(--sans);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  background: var(--surface-2);
+}
+
+/* Page content area */
+.app-content {
+  padding: clamp(20px, 4vw, 28px);
+  min-height: calc(100vh - 64px);
+}
+
+.page-head {
+  margin-bottom: 28px;
+}
+
+.page-head h1,
+.page-head .ant-typography.title {
+  font-size: clamp(1.5rem, 4vw, 1.75rem);
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+
+.page-head .ant-typography.secondary,
+.page-head p.ant-typography.ant-typography-secondary {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+/* Content card wrapper (used by layouts) */
+.content-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: clamp(20px, 4vw, 28px);
+  min-height: calc(100vh - 160px);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+}
+
+/* Cards */
+.app-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+}
+
+/* ===== Auth pages ===== */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 35%, #0f766e 100%);
+  position: relative;
+}
+
+.auth-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(13, 148, 136, 0.25), transparent),
+              radial-gradient(ellipse 60% 40% at 100% 50%, rgba(30, 58, 95, 0.2), transparent);
+  pointer-events: none;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 36px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(12px);
+}
+
+.auth-card h1 {
+  margin: 0 0 8px;
+  font-size: 1.625rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text-heading);
+  font-family: var(--sans);
+  letter-spacing: -0.03em;
+}
+
+.auth-card .auth-subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.auth-card input,
+.auth-card select {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-heading);
+  font-size: 1rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.auth-card input::placeholder {
+  color: var(--text-muted);
+}
+
+.auth-card input:focus,
+.auth-card select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.auth-card button[type="submit"] {
+  margin-top: 4px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.auth-card button[type="submit"]:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.35);
+}
+
+.auth-card button[type="submit"]:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-card p {
+  margin: 28px 0 0;
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.auth-card a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.auth-card a:hover {
+  color: var(--primary-dark);
+}
+
+.auth-error {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  font-size: 0.875rem;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+/* Auth CTA buttons (landing) */
+.auth-cta-primary {
+  display: block;
+  padding: 14px 24px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff !important;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.auth-cta-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.35);
+  color: #fff !important;
+}
+
+.auth-cta-secondary {
+  display: block;
+  padding: 14px 24px;
+  border-radius: var(--radius);
+  border: 2px solid var(--primary);
+  color: var(--primary) !important;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  background: transparent;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+
+.auth-cta-secondary:hover {
+  background: var(--primary-soft);
+  color: var(--primary-dark) !important;
+  transform: translateY(-2px);
+}
+
+/* Pet card personalization */
+.pet-card-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Layout sidebar common */
+.layout-sider {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow: auto;
+  transition: box-shadow var(--transition-slow);
+}
+
+.layout-sider-brand {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding-inline: 24px;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.layout-header {
+  background: var(--surface) !important;
+  padding-inline: 24px !important;
+  height: 64px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* Ant Design overrides */
+.ant-table-wrapper .ant-table {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: var(--surface-2) !important;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.ant-card {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-light) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.ant-tag {
+  border-radius: 8px !important;
+  font-weight: 500;
+}
+
+.ant-btn {
+  border-radius: var(--radius) !important;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 991px) {
+  .app-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 575px) {
+  .auth-card {
+    padding: 28px 20px;
+  }
+  .auth-page {
+    padding: 16px;
+  }
+}
