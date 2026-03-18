@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -20,15 +21,19 @@ from routes.vet import router as vet_router
 def create_app() -> FastAPI:
     app = FastAPI(title="BITIRME API")
 
-    # CORS: frontend (Vite) ve farklı portlar için
+    # CORS: local + deploy (Vercel vb.). CORS_ORIGINS ile ek adres: "https://xxx.vercel.app,https://yyy.net"
+    origins = [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+    ]
+    extra = os.getenv("CORS_ORIGINS", "")
+    if extra:
+        origins.extend(s.strip() for s in extra.split(",") if s.strip())
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://localhost:3000",
-        ],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

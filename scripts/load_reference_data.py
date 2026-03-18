@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 
 import pandas as pd
 from pymongo import ReplaceOne
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from app.core.config import settings
 from app.db.mongo import get_db
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 
 
@@ -18,7 +22,17 @@ def _read_csv(name: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Missing file: {path}")
 
-    df = pd.read_csv(path)
+    # CSVs exported from Excel/web tools may use different encodings and delimiters
+    # (often ';' in TR locales). Use python engine with separator sniffing.
+    last_err: Exception | None = None
+    for enc in ("utf-8", "utf-8-sig", "cp1252", "latin1"):
+        try:
+            df = pd.read_csv(path, encoding=enc, sep=None, engine="python")
+            break
+        except UnicodeDecodeError as e:
+            last_err = e
+    else:
+        raise last_err  # type: ignore[misc]
     df.columns = [str(c).strip() for c in df.columns]
     if "ADRNo" not in df.columns:
         raise ValueError(f"{name} must contain ADRNo column. Found: {list(df.columns)}")
