@@ -15,6 +15,7 @@ from app.utils.security import (
     create_access_token,
     get_current_user,
     hash_password,
+    validate_password_strength,
     verify_password,
 )
 
@@ -95,8 +96,9 @@ def register(request: Request, payload: RegisterIn):
 
     role: RoleType = "pet_owner"
     raw_password = payload.password.strip() if isinstance(payload.password, str) else payload.password
-    if len(raw_password) < 8:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters.")
+    pw_error = validate_password_strength(raw_password, email=email)
+    if pw_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pw_error)
 
     try:
         password_hash = hash_password(raw_password)

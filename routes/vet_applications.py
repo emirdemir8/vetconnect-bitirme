@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.db.mongo import get_db
+from app.utils.audit import record_audit
 from app.utils.clinic_scope import clinic_exists
 from app.utils.sanitize import sanitize_optional_text
 from app.utils.security import get_current_user, require_role
@@ -173,6 +174,14 @@ def admin_approve_vet_application(
             {"_id": oid},
             {"$set": {"status": "approved", "reviewed_at": now, "reviewed_by": reviewer, "clinic_id": coid}},
         )
+        record_audit(
+            action="vet_application.approve",
+            actor_id=current.get("id"),
+            actor_email=reviewer,
+            target_type="vet_application",
+            target_id=str(oid),
+            metadata={"user_id": str(user_oid), "clinic_id": str(coid), "note": "clinic_reassigned"},
+        )
         fresh = db["vet_applications"].find_one({"_id": oid})
         return _doc_to_out(fresh)  # type: ignore[arg-type]
 
@@ -196,6 +205,14 @@ def admin_approve_vet_application(
                 "clinic_id": coid,
             }
         },
+    )
+    record_audit(
+        action="vet_application.approve",
+        actor_id=current.get("id"),
+        actor_email=reviewer,
+        target_type="vet_application",
+        target_id=str(oid),
+        metadata={"user_id": str(user_oid), "clinic_id": str(coid), "role_change": "pet_owner->vet"},
     )
     fresh = db["vet_applications"].find_one({"_id": oid})
     return _doc_to_out(fresh)  # type: ignore[arg-type]
@@ -231,6 +248,14 @@ def admin_reject_vet_application(
                 "reject_reason": reason,
             }
         },
+    )
+    record_audit(
+        action="vet_application.reject",
+        actor_id=current.get("id"),
+        actor_email=reviewer,
+        target_type="vet_application",
+        target_id=str(oid),
+        metadata={"user_id": str(app_doc.get("user_id")), "reason": reason},
     )
     fresh = db["vet_applications"].find_one({"_id": oid})
     return _doc_to_out(fresh)  # type: ignore[arg-type]

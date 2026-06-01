@@ -17,6 +17,38 @@ bearer_scheme = HTTPBearer(auto_error=False)
 RoleType = Literal["vet", "pet_owner", "admin"]
 
 
+_COMMON_PASSWORDS = frozenset(
+    {
+        "password", "12345678", "123456789", "1234567890", "qwerty123",
+        "password1", "password123", "11111111", "00000000", "abcdefgh",
+        "iloveyou", "admin123", "welcome1", "qwertyuiop", "1q2w3e4r",
+        "letmein1", "sunshine", "football", "baseball", "dragon123",
+    }
+)
+
+
+def validate_password_strength(password: str, *, email: str | None = None) -> str | None:
+    """Parola yeterince güçlü değilse hata mesajı (str), uygunsa None döner."""
+    if not isinstance(password, str):
+        return "Password must be text."
+    pw = password.strip()
+    if len(pw) < 8:
+        return "Password must be at least 8 characters."
+    if len(pw) > 128:
+        return "Password must be at most 128 characters."
+    if not any(c.isalpha() for c in pw):
+        return "Password must contain at least one letter."
+    if not any(c.isdigit() for c in pw):
+        return "Password must contain at least one number."
+    if pw.lower() in _COMMON_PASSWORDS:
+        return "This password is too common. Please choose a stronger one."
+    if email:
+        local = email.split("@", 1)[0].strip().lower()
+        if local and len(local) >= 3 and local in pw.lower():
+            return "Password must not contain your email address."
+    return None
+
+
 def _password_bytes(password: str) -> bytes:
     b = password.encode("utf-8")
     return b[:72] if len(b) > 72 else b

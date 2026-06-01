@@ -42,8 +42,11 @@ class Settings:
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
         )
 
-        self.auth_register_limit: str = os.getenv("AUTH_REGISTER_LIMIT", "20/minute")
-        self.auth_login_limit: str = os.getenv("AUTH_LOGIN_LIMIT", "20/minute")
+        self.auth_register_limit: str = os.getenv("AUTH_REGISTER_LIMIT", "10/hour")
+        self.auth_login_limit: str = os.getenv("AUTH_LOGIN_LIMIT", "5/minute")
+
+        # Ters proxy/yük dengeleyici arkasında ise istemci IP'sini X-Forwarded-For'dan al.
+        self.trust_proxy: bool = os.getenv("TRUST_PROXY", "").strip() == "1"
 
         self.trusted_hosts: list[str] = [
             h.strip() for h in os.getenv("TRUSTED_HOSTS", "").split(",") if h.strip()

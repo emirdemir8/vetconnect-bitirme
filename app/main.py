@@ -71,12 +71,22 @@ def create_app() -> FastAPI:
     app.include_router(vet_applications_router)
     app.include_router(vet_applications_admin_router)
 
-    app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
+    import pathlib
+
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    dist_dir = project_root / "frontend" / "dist"
+    dev_dir = project_root / "frontend"
+    # Üretimde yalnızca build çıktısı (dist) sunulur; ham kaynak kodu ifşa edilmez.
+    spa_dir = dist_dir if dist_dir.is_dir() else dev_dir
+    index_path = spa_dir / "index.html"
+
+    app.mount("/frontend", StaticFiles(directory=str(spa_dir)), name="frontend")
 
     @app.get("/", response_class=HTMLResponse)
     def root_ui():
-        with open("frontend/index.html", "r", encoding="utf-8") as f:
-            return f.read()
+        if not index_path.is_file():
+            return HTMLResponse("<h1>Frontend build not found.</h1>", status_code=404)
+        return index_path.read_text(encoding="utf-8")
 
     return app
 
