@@ -1,7 +1,13 @@
 fastapi
+slowapi
 uvicorn
 pymongo
 pandas
+# Windows + Python 3.14: önce hazır tekerlek kullanın (kaynak derleme C derleyicisi ister):
+#   pip install "scikit-learn>=1.8" --only-binary=:all:
+scikit-learn
+joblib
+numpy
 python-jose
 bcrypt
 bleach

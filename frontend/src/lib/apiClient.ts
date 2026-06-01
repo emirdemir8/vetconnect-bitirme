@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// Geliştirmede Vite proxy kullan: istekler aynı porta gider, Vite backend'e (8000) yönlendirir
+// In dev, Vite proxies API requests to the backend on port 8000
 const API_BASE_URL =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ??
   (typeof import.meta !== "undefined" && (import.meta as any).env?.DEV ? "" : "http://127.0.0.1:8000");
@@ -26,7 +26,7 @@ export function clearToken() {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {

@@ -34,6 +34,8 @@ interface SymptomReport {
   system_inferred_symptoms: string[];
   system_matched_symptoms: string[];
   system_matched_records: number;
+  owner_guidance?: string | null;
+  owner_guidance_source?: string | null;
   created_at: string | null;
   vet_feedback: string | null;
   vet_feedback_at: string | null;
@@ -147,6 +149,28 @@ export const VetReports: React.FC = () => {
                         <div style={{ marginBottom: 8 }}>
                           <Text strong>Symptoms: </Text>
                           <Text>{r.symptoms.join(", ")}</Text>
+                        </div>
+                      )}
+                      {r.owner_guidance && (
+                        <div style={{ marginBottom: 8 }}>
+                          <Text strong>Owner guidance </Text>
+                          {r.owner_guidance_source && (
+                            <Tag color={r.owner_guidance_source === "openai" ? "purple" : "default"}>
+                              {r.owner_guidance_source === "openai" ? "AI" : "Auto"}
+                            </Tag>
+                          )}
+                          <div
+                            style={{
+                              background: "#f0fdf4",
+                              padding: 10,
+                              borderRadius: 8,
+                              marginTop: 6,
+                              whiteSpace: "pre-wrap",
+                              fontSize: 13,
+                            }}
+                          >
+                            {r.owner_guidance}
+                          </div>
                         </div>
                       )}
                       <Divider style={{ margin: "8px 0" }} />

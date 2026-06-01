@@ -12,8 +12,9 @@ DATA_DIR = pathlib.Path(__file__).resolve().parents[1] / "data"
 
 @router.get("/preview")
 def preview_csv(filename: str = "sample.csv", rows: int = 5):
-    path = DATA_DIR / filename
+    safe_name = pathlib.Path(filename).name
+    path = DATA_DIR / safe_name
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        raise HTTPException(status_code=404, detail=f"File not found: {safe_name}")
     df = pd.read_csv(path)
     return {"columns": list(df.columns), "preview": df.head(rows).to_dict(orient="records")}

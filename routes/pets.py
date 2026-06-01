@@ -5,12 +5,22 @@ from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.mongo import get_db
+from app.utils.clinic_scope import (
+    owner_user_ids_for_vet,
+    vet_may_access_pet,
+)
 from app.utils.sanitize import sanitize_image_url, sanitize_optional_text, sanitize_text
 from app.utils.security import get_current_user
 from models.pet import PetCreate, PetPublic, PetUpdate, VaccineEntry
 
 
 router = APIRouter(prefix="/pets", tags=["pets"])
+
+
+def _owner_id_str(raw) -> str | None:
+    if raw is None:
+        return None
+    return str(raw)
 
 
 def _serialize_vaccine_history(history: list | None) -> list[dict]:
@@ -110,10 +120,17 @@ def _get_owner_map(db, owner_ids: list[str]) -> dict[str, dict]:
 async def list_pets(current=Depends(get_current_user)):
     db = get_db()
     col = db["pets"]
-    query = {}
-    # Pet owner ise sadece kendi pet'lerini görsün
+    query: dict = {}
     if current["role"] == "pet_owner":
-        query["owner_id"] = current["id"]
+        oid = current["id"]
+        query["owner_id"] = {"$in": [oid, ObjectId(oid)] if ObjectId.is_valid(oid) else [oid]}
+    elif current["role"] == "vet":
+        oids = owner_user_ids_for_vet(db, current["id"])
+        query["owner_id"] = {"$in": oids}
+    elif current["role"] == "admin":
+        pass
+    else:
+        return []
     docs = list(col.find(query).limit(500))
     owner_ids = list({str(d.get("owner_id")) for d in docs if d.get("owner_id")})
     owner_map = _get_owner_map(db, owner_ids)
@@ -137,6 +154,11 @@ async def create_pet(
     owner_id: str | None = payload.owner_id
     if current["role"] == "pet_owner":
         owner_id = current["id"]
+    elif current["role"] == "vet":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only pet owners can create pet records.",
+        )
 
     doc = {
         "name": sanitize_text(payload.name, 100) or "",
@@ -175,11 +197,16 @@ async def get_pet(pet_id: str, current=Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
 
-    if current["role"] == "pet_owner" and doc.get("owner_id") != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz erişim")
+    if current["role"] == "pet_owner" and _owner_id_str(doc.get("owner_id")) != current["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if current["role"] == "vet" and not vet_may_access_pet(db, current["id"], doc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This patient is outside your clinic scope.",
+        )
 
     owner_name = None
-    oid = str(doc.get("owner_id")) if doc.get("owner_id") else None
+    oid = _owner_id_str(doc.get("owner_id"))
     if oid:
         owner_map = _get_owner_map(db, [oid])
         owner_name = owner_map.get(oid, {}).get("full_name")
@@ -199,8 +226,13 @@ async def update_pet(pet_id: str, payload: PetUpdate, current=Depends(get_curren
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
 
-    if current["role"] == "pet_owner" and doc.get("owner_id") != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz erişim")
+    if current["role"] == "pet_owner" and _owner_id_str(doc.get("owner_id")) != current["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if current["role"] == "vet":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only pet owners can update records.",
+        )
 
     updates = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
     if "vaccine_history" in updates and updates["vaccine_history"] is not None:
@@ -245,8 +277,13 @@ async def delete_pet(pet_id: str, current=Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
 
-    if current["role"] == "pet_owner" and doc.get("owner_id") != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz erişim")
+    if current["role"] == "pet_owner" and _owner_id_str(doc.get("owner_id")) != current["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if current["role"] == "vet":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only pet owners can delete records.",
+        )
 
     col.delete_one({"_id": oid})
     return None

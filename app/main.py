@@ -1,13 +1,22 @@
 from __future__ import annotations
 
-import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.core.config import settings
+from app.middleware.security import SecurityHeadersMiddleware
+from app.utils.rate_limit import limiter
 from routes.appointments import router as appointments_router
 from routes.auth import router as auth_router
+from routes.clinics import router as clinics_router
 from routes.cases import router as cases_router
 from routes.data_demo import router as data_router
 from routes.health import router as health_router
@@ -16,21 +25,26 @@ from routes.stats import router as stats_router
 from routes.symptom_reports import router as symptom_reports_router
 from routes.vaccine_types import router as vaccine_types_router
 from routes.vet import router as vet_router
+from routes.vet_applications import admin_router as vet_applications_admin_router
+from routes.vet_applications import router as vet_applications_router
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    settings.validate()
+    from app.db.indexes import ensure_indexes
+
+    ensure_indexes()
+    yield
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="BITIRME API")
+    app = FastAPI(title="BITIRME API", lifespan=lifespan)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    # CORS: local + deploy (Vercel vb.). CORS_ORIGINS ile ek adres: "https://xxx.vercel.app,https://yyy.net"
-    origins = [
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-    ]
-    extra = os.getenv("CORS_ORIGINS", "")
-    if extra:
-        origins.extend(s.strip() for s in extra.split(",") if s.strip())
+    origins = settings.cors_origins_list()
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -38,10 +52,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    if settings.force_https:
+        app.add_middleware(HTTPSRedirectMiddleware)
+    if settings.trusted_hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 
-    # API router'ları
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(clinics_router)
     app.include_router(pets_router)
     app.include_router(appointments_router)
     app.include_router(vaccine_types_router)
@@ -50,13 +68,13 @@ def create_app() -> FastAPI:
     app.include_router(symptom_reports_router)
     app.include_router(data_router)
     app.include_router(vet_router)
+    app.include_router(vet_applications_router)
+    app.include_router(vet_applications_admin_router)
 
-    # Frontend statik dosyaları (index.html)
     app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
     @app.get("/", response_class=HTMLResponse)
     def root_ui():
-        # Basit redirect benzeri: kullanıcıyı frontend ana sayfasına yönlendir
         with open("frontend/index.html", "r", encoding="utf-8") as f:
             return f.read()
 

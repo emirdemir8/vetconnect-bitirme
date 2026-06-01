@@ -1,102 +1,46 @@
 from __future__ import annotations
 
-import re
-from typing import Any
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
-from app.db.mongo import get_db
-from app.utils.risk_from_text import (
-    infer_symptoms_and_levels_from_text,
-    search_knowledge_base_for_text,
-)
+from app.ml.serious_model import get_serious_predictor, load_symptom_options_from_csv
+from app.utils.owner_guidance import generate_owner_guidance
+from app.utils.symptom_inference import infer_llts_from_text, merge_symptom_lists
+from app.utils.symptom_risk_floor import apply_symptom_risk_floor
 
 
 router = APIRouter(prefix="/vet", tags=["vet"])
-
-# Tigress verisinde semptomların tutulduğu bilinen alanlar
-KNOWN_SYMPTOM_FIELDS = {
-    "SOC",
-    "LLT: Lower Level Term",
-    "HLT:Higher Level Term",
-    "PT: Preffered Term",
-}
-
-# Kullanıcının tanımladığı risk seviyelerine göre anahtar terimler
-RISK_LEVEL_TERMS: dict[str, set[str]] = {
-    # Seviye 1: Kritik alarm (en ciddi)
-    "level_1": {
-        "death",
-        "death by euthanasia",
-        "digestive tract haemorrhage",
-        "pneumonitis",
-        "hyponatremia",
-    },
-    # Seviye 2: Yüksek risk
-    "level_2": {
-        "dehydration",
-        "blood in faeces",
-        "myopathy",
-        "muscle wasting",
-        "infectious disease nos",
-    },
-    # Seviye 3: Orta derece
-    "level_3": {
-        "emesis",
-        "diarrhoea",
-        "mucous stool",
-        "hyperhidrosis",
-    },
-    # Seviye 4: Sistemik / operasyonel risk
-    "level_4": {
-        "lack of efficacy",
-        "other abnormal test result",
-    },
-    # Seviye 5: Hafif / lokal
-    "level_5": {
-        "injection site reactions",
-        "lethargy",
-    },
-}
-
-SERIOUS_LEVELS = {"level_1", "level_2"}
-
-
-def _symptom_to_levels_from_list(symptom: str) -> set[str]:
-    """
-    Kullanıcının girdiği semptom metnini doğrudan risk listeleriyle eşleştir.
-    (Bu, özellikle injection site reactions gibi net terimler için kullanılır.)
-    """
-    s = symptom.strip().lower()
-    levels: set[str] = set()
-    for level, terms in RISK_LEVEL_TERMS.items():
-        for term in terms:
-            if s == term:
-                levels.add(level)
-    return levels
 
 
 class SymptomCheckRequest(BaseModel):
     animal_species: str | None = Field(
         default=None,
-        description="Hayvan türü/cins (örn: cat, dog, kedi, köpek). Dataset’te bu türe ait kayıtlar filtrelenir.",
+        description="Animal species (e.g. cat, dog).",
     )
     product_or_vaccine: str | None = Field(
         default=None,
-        description="Hangi aşı/ilaç sonrası (şüpheli ürün adı). Dataset’te bu ürüne ait kayıtlar filtrelenir.",
+        description="Selected vaccine / suspected product name.",
     )
     symptoms: list[str] = Field(
         default_factory=list,
-        description="Liste halinde semptomlar (virgülle ayrılmış veya dizi)",
+        description="Symptoms selected from dataset or added manually",
     )
     free_text: str | None = Field(
         default=None,
-        description="Serbest metin / yorum (örn: 'We have frequent vomitting complaints in my cat'). Yorumdan anlam çıkarılıp risk ile eşleştirilir.",
+        description="Free-text symptom description; matched to dataset LLT labels when possible",
     )
     adr_no: str | None = Field(
         default=None,
-        description="Varsa ilgili ADRNo (Tigress kaydının numarası)",
+        description="Optional ADRNo",
+    )
+    include_owner_guidance: bool = Field(
+        default=False,
+        description="If true, include short owner guidance (OpenAI if configured, else template).",
+    )
+    pet_name: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Used with include_owner_guidance in guidance text",
     )
 
     @model_validator(mode="after")
@@ -104,270 +48,167 @@ class SymptomCheckRequest(BaseModel):
         terms = [t.strip() for t in self.symptoms if t and t.strip()]
         ft = (self.free_text or "").strip()
         if not terms and not ft:
-            raise ValueError("En az bir semptom veya serbest metin (free_text) girilmelidir.")
+            raise ValueError(
+                "Select at least one symptom from the list or describe what you are seeing (free_text)."
+            )
         return self
 
 
 class SymptomCheckResponse(BaseModel):
     serious: bool
     risk_level: int | None = Field(
-        default=None, description="1=kritik, 2=yüksek, 3=orta, 4=sistemik, 5=hafif, None=bulunamadı"
+        default=None, description="Model-based risk level 1–5"
     )
-    risk_label: str | None = Field(
-        default=None, description="İnsan okunur seviye açıklaması"
-    )
+    risk_label: str | None = Field(default=None, description="Human-readable level label")
     matched_symptoms: list[str]
     matched_records: int
     reasons: list[str]
     inferred_symptoms: list[str] = Field(
         default_factory=list,
-        description="Serbest metinden çıkarılan (eşanlamlı eşleşen) semptom terimleri",
+        description="Legacy field; may be empty for ML-only flow",
+    )
+    ml_serious_probability: float | None = Field(
+        default=None,
+        description="Model P(Serious=Y), 0–1",
+    )
+    owner_guidance: str | None = Field(
+        default=None,
+        description="Short guidance text for owner (AI or template)",
+    )
+    owner_guidance_source: str | None = Field(
+        default=None,
+        description="openai | template",
     )
 
 
-def _infer_symptom_fields(example_doc: dict[str, Any]) -> list[str]:
-    """
-    Belge anahtarlarına göre semptom alanlarını tahmin et.
-    """
-    keys = list(example_doc.keys())
-    symptom_fields: list[str] = []
-    # Önce bilinen semptom alanlarını ekle
-    for k in keys:
-        if k in KNOWN_SYMPTOM_FIELDS:
-            symptom_fields.append(k)
-    # Sonra isimden tahmin
-    for k in keys:
-        kl = k.lower()
-        if kl == "_id":
-            continue
-        if "symptom" in kl or "sign" in kl or "klinik" in kl:
-            symptom_fields.append(k)
-    # Eğer hala semptom alanı yakalayamazsak, string ağırlıklı kolonları fallback olarak kullan
-    if not symptom_fields:
-        for k, v in example_doc.items():
-            kl = k.lower()
-            if kl in {"_id", "adrno"}:
-                continue
-            if isinstance(v, (str, list, tuple, set)) or v is None:
-                symptom_fields.append(k)
-    return symptom_fields
+@router.get("/symptom-options")
+def list_symptom_options(limit: int = Query(2000, ge=20, le=2000)):
+    """LLT symptom labels from Animal Symptoms.csv (multi-select)."""
+    try:
+        items = load_symptom_options_from_csv(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not load symptom list: {e!s}") from e
+    return {"items": [{"value": s, "label": s} for s in items]}
 
 
-def _infer_animal_fields(example_doc: dict[str, Any]) -> list[str]:
-    """Hayvan türü/cins bilgisinin tutulduğu alanları tahmin et (Species, Animal, Breed vb.)."""
-    out: list[str] = []
-    for k in example_doc.keys():
-        kl = k.lower()
-        if kl in {"_id", "adrno"}:
-            continue
-        if any(x in kl for x in ("species", "animal", "breed", "tür", "cins", "genus")):
-            out.append(k)
-    return out
-
-
-def _infer_product_fields(example_doc: dict[str, Any]) -> list[str]:
-    """Şüpheli ürün/aşı/ilaç bilgisinin tutulduğu alanları tahmin et (Drug, Product, Vaccine, SAR vb.)."""
-    out: list[str] = []
-    for k in example_doc.keys():
-        kl = k.lower()
-        if kl in {"_id", "adrno"}:
-            continue
-        if any(x in kl for x in ("drug", "product", "vaccine", "suspect", "medic", "ilaç", "aşı", "sar", "active", "trade")):
-            out.append(k)
-    return out
-
-
-def _text_risk_levels(text: str) -> set[str]:
-    """
-    Bir metnin içinde geçen risk seviyelerini döndür.
-    """
-    levels: set[str] = set()
-    tl = text.lower()
-    for level, terms in RISK_LEVEL_TERMS.items():
-        for term in terms:
-            if term in tl:
-                levels.add(level)
-                break
-    return levels
+@router.get("/ml-model-status")
+def ml_model_status():
+    """Model eğitimi ve doğrulama özeti."""
+    pred = get_serious_predictor()
+    if not pred.ready:
+        return {
+            "ready": False,
+            "error": pred.load_error or "Unknown error",
+        }
+    return {
+        "ready": True,
+        "training_rows": pred.n_rows,
+        "holdout_accuracy": pred.holdout_accuracy,
+        "holdout_roc_auc": pred.holdout_roc_auc,
+        "model": "tfidf_logistic_regression",
+        "data_source": "data/*.csv (TigressADR-Animal, Animal Symptoms, SAR)",
+    }
 
 
 @router.post("/check-serious", response_model=SymptomCheckResponse)
 def check_serious(payload: SymptomCheckRequest):
     """
-    Girilen semptomlara ve/veya serbest metne (yorum) göre Tigress tabanlı ciddiyet kontrolü.
-
-    - Serbest metin verilirse yorumdan anlam çıkarılır (eşanlamlılar: vomitting→emesis vb.),
-      dataset ile karşılaştırılıp risk seviyesi ve geri bildirim üretilir.
-    - Hem semptom listesi hem serbest metin verilebilir; ikisi birleştirilerek değerlendirilir.
+    CSV birleşik veri seti üzerinde eğitilmiş TF-IDF + lojistik regresyon ile
+    Serious (Y/N) olasılığı ve risk seviyesi.
     """
-    db = get_db()
-    col = db["vet_knowledge_base"]
-
-    example = col.find_one()
-    if not example:
-        raise HTTPException(status_code=500, detail="Bilgi bankası boş görünüyor.")
-
-    symptom_fields = _infer_symptom_fields(example)
-    animal_fields = _infer_animal_fields(example)
-    product_fields = _infer_product_fields(example)
-
-    # Açık semptom listesi
-    terms_explicit = [t.strip() for t in payload.symptoms if t and t.strip()]
-
-    # Serbest metinden çıkarılan semptomlar ve tetiklenen seviyeler
-    inferred_canonical: list[str] = []
-    triggered_levels_from_free_text: set[str] = set()
-    if payload.free_text and payload.free_text.strip():
-        inferred_canonical, triggered_levels_from_free_text = infer_symptoms_and_levels_from_text(
-            payload.free_text.strip(), RISK_LEVEL_TERMS
+    pred = get_serious_predictor()
+    if not pred.ready:
+        raise HTTPException(
+            status_code=503,
+            detail=f"ML model could not load: {pred.load_error or 'unknown'}",
         )
 
-    # Birleşik terim listesi (gösterim ve DB sorgusu için)
-    terms = list(dict.fromkeys(terms_explicit + inferred_canonical))
-    if not terms:
-        terms = inferred_canonical
+    terms = [t.strip() for t in payload.symptoms if t and t.strip()]
+    free = (payload.free_text or "").strip() or None
+    animal = (payload.animal_species or "").strip() or None
+    product = (payload.product_or_vaccine or "").strip() or None
 
-    # Sadece serbest metin ile tetiklenen seviyeler + açık semptom listesinden tetiklenenler
-    triggered_levels_from_input: set[str] = set()
-    for term in terms_explicit:
-        triggered_levels_from_input |= _symptom_to_levels_from_list(term)
-    triggered_levels_merged = triggered_levels_from_input | triggered_levels_from_free_text
+    inferred: list[str] = []
+    if free:
+        try:
+            vocab = load_symptom_options_from_csv(limit=2000)
+            inferred = infer_llts_from_text(free, vocab)
+        except Exception:
+            inferred = infer_llts_from_text(free)
 
-    # Sorgu parçaları: semptom + hayvan türü + ürün/aşı + ADRNo
-    and_parts: list[dict[str, Any]] = []
+    merged_symptoms = merge_symptom_lists(terms, inferred)
+    if not merged_symptoms and free:
+        merged_symptoms = []
 
-    if terms:
-        or_clauses = []
-        for field in symptom_fields:
-            for term in terms:
-                or_clauses.append({field: {"$regex": re.escape(term), "$options": "i"}})
-        and_parts.append({"$or": or_clauses})
-
-    animal_filter = (payload.animal_species or "").strip()
-    if animal_filter and animal_fields:
-        and_parts.append({
-            "$or": [
-                {f: {"$regex": re.escape(animal_filter), "$options": "i"}}
-                for f in animal_fields
-            ]
-        })
-
-    product_filter = (payload.product_or_vaccine or "").strip()
-    if product_filter and product_fields:
-        and_parts.append({
-            "$or": [
-                {f: {"$regex": re.escape(product_filter), "$options": "i"}}
-                for f in product_fields
-            ]
-        })
-
-    if payload.adr_no:
-        adr = payload.adr_no.strip()
-        and_parts.append({"$or": [{"ADRNo": adr}, {"_id": adr}]})
-
-    matched_docs = []
-    if and_parts:
-        query: dict[str, Any] = {"$and": and_parts} if len(and_parts) > 1 else and_parts[0]
-        matched_docs = list(col.find(query).limit(200))
-
-    # Serbest metin verilip terim eşleşmesi az/boşsa, metin kelimeleriyle DB'de ara
-    if (payload.free_text and payload.free_text.strip()) and len(matched_docs) < 50:
-        docs_ft, levels_in_docs = search_knowledge_base_for_text(
-            col, payload.free_text.strip(), symptom_fields, RISK_LEVEL_TERMS, payload.adr_no
+    try:
+        out = pred.predict(
+            symptoms=merged_symptoms,
+            free_text=free,
+            animal_species=animal,
+            product_or_vaccine=product,
         )
-        if docs_ft and not matched_docs:
-            matched_docs = docs_ft
-            triggered_levels_merged |= levels_in_docs
-        elif docs_ft:
-            # Birleşik kayıt sayısı için ek eşleşmeleri de sayabiliriz; şimdilik tetiklenen seviyeleri birleştiriyoruz
-            triggered_levels_merged |= levels_in_docs
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {e!s}") from e
 
-    # Eşleşen terimler (doküman metinlerinde geçen)
-    matched_terms: set[str] = set()
-    triggered_levels_from_text: set[str] = set()
-    for doc in matched_docs:
-        for field in symptom_fields:
-            val = doc.get(field)
-            if val is None:
-                continue
-            text = " ".join(map(str, val)) if isinstance(val, (list, tuple, set)) else str(val)
-            tl = text.lower()
-            for term in terms:
-                if term.lower() in tl:
-                    matched_terms.add(term)
-            triggered_levels_from_text |= _text_risk_levels(text)
+    out = apply_symptom_risk_floor(out, merged_symptoms)
 
-    # Nihai risk seviyesi: kullanıcı girişi (açık + serbest metinden çıkarılan) birleşik seviyelerden
-    ordered_levels = ["level_1", "level_2", "level_3", "level_4", "level_5"]
-    overall_level_name: str | None = None
-    for lvl in ordered_levels:
-        if lvl in triggered_levels_merged:
-            overall_level_name = lvl
-            break
+    if payload.adr_no and str(payload.adr_no).strip():
+        out["reasons"] = list(out["reasons"]) + [
+            f"Note: ADRNo provided ({payload.adr_no.strip()}); prediction uses all text features."
+        ]
 
-    level_number: int | None = None
-    level_label: str | None = None
-    if overall_level_name:
-        level_number = int(overall_level_name.split("_")[1])
-        level_label = {
-            1: "Seviye 1: Kritik alarm (acil müdahale / ölüm riski)",
-            2: "Seviye 2: Yüksek risk (hızlı kötüleşme potansiyeli)",
-            3: "Seviye 3: Orta derece (yakın takip gerektirir)",
-            4: "Seviye 4: Sistemik / operasyonel risk",
-            5: "Seviye 5: Hafif / lokal",
-        }.get(level_number)
+    og: str | None = None
+    og_src: str | None = None
+    reasons = list(out.get("reasons") or [])
+    if payload.include_owner_guidance:
+        reasons = []
 
-    serious_any = overall_level_name in SERIOUS_LEVELS
-
-    reasons: list[str] = []
-    if animal_filter:
-        reasons.append(f"Hayvan türü/cins filtresi: '{animal_filter}' (dataset’te bu türe göre filtrelendi).")
-    if product_filter:
-        reasons.append(f"Ürün/aşı filtresi: '{product_filter}' (hangi aşı/ilaç sonrası belirtildi).")
-    if inferred_canonical:
-        reasons.append(f"Serbest metinden çıkarılan semptomlar: {', '.join(inferred_canonical)}.")
-    if overall_level_name:
-        reasons.append(f"Genel risk seviyesi: {level_label}.")
-    else:
-        reasons.append("Girilen ifadeler tanımlı risk seviyeleri ile eşleşmedi (eşanlamlılar ve dataset kontrol edildi).")
-    if triggered_levels_from_text:
-        reasons.append(f"Tigress kayıtlarında görülen seviyeler: {', '.join(sorted(triggered_levels_from_text))}.")
-    if serious_any:
-        reasons.append("Seviye 1 veya 2 eşleşmesi nedeniyle 'ciddi' kabul edildi.")
-    else:
-        reasons.append("Seviye 1-2 eşleşmesi yok; 'ciddi' kabul edilmedi.")
-    if payload.adr_no:
-        reasons.append(f"ADRNo filtresi: {payload.adr_no}")
+    if payload.include_owner_guidance:
+        og, og_src = generate_owner_guidance(
+            pet_name=(payload.pet_name or "").strip() or None,
+            animal_species=animal,
+            product_or_vaccine=product,
+            symptoms=merged_symptoms,
+            selected_symptoms=terms,
+            inferred_symptoms=inferred,
+            free_text=free,
+            serious=bool(out["serious"]),
+            risk_level=out.get("risk_level"),
+            risk_label=out.get("risk_label"),
+            ml_proba=out.get("ml_serious_probability"),
+        )
 
     return SymptomCheckResponse(
-        serious=serious_any,
-        risk_level=level_number,
-        risk_label=level_label,
-        matched_symptoms=sorted(matched_terms) or sorted(inferred_canonical),
-        matched_records=len(matched_docs),
+        serious=bool(out["serious"]),
+        risk_level=out["risk_level"],
+        risk_label=out["risk_label"],
+        matched_symptoms=merged_symptoms or out["matched_symptoms"],
+        matched_records=int(out["matched_records"]),
         reasons=reasons,
-        inferred_symptoms=inferred_canonical,
+        inferred_symptoms=inferred,
+        ml_serious_probability=out.get("ml_serious_probability"),
+        owner_guidance=og,
+        owner_guidance_source=og_src,
     )
 
 
 @router.get("/risk-terms")
 def risk_terms():
     """
-    Tanımlı risk seviyeleri ve ilgili terimleri döndür.
-    Frontend, yardım metinleri ve referans için kullanabilir.
+    Geriye dönük uyumluluk: risk seviyelerinin anlamı (artık anahtar kelime listesi kullanılmıyor).
     """
-    labels = {
-        "level_1": "Seviye 1: Kritik alarm (acil müdahale / ölüm riski)",
-        "level_2": "Seviye 2: Yüksek risk (hızlı kötüleşme potansiyeli)",
-        "level_3": "Seviye 3: Orta derece (yakın takip gerektirir)",
-        "level_4": "Seviye 4: Sistemik / operasyonel risk",
-        "level_5": "Seviye 5: Hafif / lokal",
-    }
+    pred = get_serious_predictor()
     return {
         "levels": [
-            {"id": name, "label": labels.get(name), "terms": sorted(list(terms))}
-            for name, terms in RISK_LEVEL_TERMS.items()
+            {"id": "level_1", "label": "Level 1: Highest model probability", "terms": []},
+            {"id": "level_2", "label": "Level 2: High", "terms": []},
+            {"id": "level_3", "label": "Level 3: Moderate", "terms": []},
+            {"id": "level_4", "label": "Level 4: Low–moderate", "terms": []},
+            {"id": "level_5", "label": "Level 5: Low", "terms": []},
         ],
-        "serious_levels": sorted(list(SERIOUS_LEVELS)),
+        "serious_levels": ["level_1", "level_2"],
+        "ml_ready": pred.ready,
+        "note": "Predictions use only the ML model trained on CSV files in data/; no fixed keyword rules.",
     }
-

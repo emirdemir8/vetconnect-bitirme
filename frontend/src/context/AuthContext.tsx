@@ -7,6 +7,8 @@ interface User {
   email: string;
   role: Role;
   full_name?: string | null;
+  clinic_id?: string | null;
+  clinic_name?: string | null;
 }
 
 interface AuthContextValue {
@@ -14,12 +16,26 @@ interface AuthContextValue {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, role: Role, fullName?: string) => Promise<void>;
+  register: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => void;
   updateProfile: (fullName: string | null) => Promise<void>;
+  /** Pet owner: clinic membership (clinic_id ObjectId or null to clear) */
+  updateClinic: (clinicId: string | null) => Promise<void>;
+  /** Refresh user from /auth/me (e.g. after role approval) */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function mapMe(data: Record<string, unknown>): User {
+  return {
+    email: String(data.email),
+    role: data.role as Role,
+    full_name: (data.full_name as string | null | undefined) ?? null,
+    clinic_id: (data.clinic_id as string | null | undefined) ?? null,
+    clinic_name: (data.clinic_name as string | null | undefined) ?? null,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -36,8 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       api
         .get("/auth/me")
         .then((res) => {
-          if (!cancelled && res.data)
-            setUser({ email: res.data.email, role: res.data.role, full_name: res.data.full_name ?? null });
+          if (!cancelled && res.data) setUser(mapMe(res.data));
         })
         .catch(() => {
           if (!cancelled) {
@@ -65,11 +80,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const me = await api.get("/auth/me", {
       headers: { Authorization: `Bearer ${t}` },
     });
-    setUser({ email: me.data.email, role: me.data.role, full_name: me.data.full_name ?? null });
+    setUser(mapMe(me.data));
   }
 
-  async function register(email: string, password: string, role: Role, fullName?: string) {
-    await api.post("/auth/register", { email, password, role, full_name: fullName || undefined });
+  async function register(email: string, password: string, fullName?: string) {
+    await api.post("/auth/register", { email, password, full_name: fullName || undefined });
   }
 
   function logout() {
@@ -80,12 +95,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   async function updateProfile(fullName: string | null) {
     const res = await api.patch("/auth/me", { full_name: fullName || null });
-    setUser((prev) => (prev ? { ...prev, full_name: res.data.full_name ?? null } : null));
+    setUser(mapMe(res.data));
+  }
+
+  async function updateClinic(clinicId: string | null) {
+    const res = await api.patch("/auth/me", { clinic_id: clinicId });
+    setUser(mapMe(res.data));
+  }
+
+  async function refreshUser() {
+    const t = getToken();
+    if (!t) return;
+    const me = await api.get("/auth/me", { headers: { Authorization: `Bearer ${t}` } });
+    setUser(mapMe(me.data));
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, login, register, logout, updateProfile }}
+      value={{ user, token, loading, login, register, logout, updateProfile, updateClinic, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

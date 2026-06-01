@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
             color: "#b91c1c",
           }}
         >
-          <strong>Something went wrong</strong>
+          <strong>An error occurred</strong>
           <pre style={{ marginTop: 8, fontSize: 12, overflow: "auto" }}>
             {this.state.error.message}
           </pre>

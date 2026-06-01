@@ -23,6 +23,8 @@ interface SymptomReport {
   system_risk_level: number | null;
   system_risk_label: string | null;
   system_serious: boolean;
+  owner_guidance?: string | null;
+  owner_guidance_source?: string | null;
   created_at: string | null;
   vet_feedback: string | null;
 }
@@ -155,6 +157,26 @@ export const OwnerHistory: React.FC = () => {
               <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
                 {r.free_text || r.symptoms?.join(", ")}
               </Text>
+            )}
+            {r.owner_guidance && (
+              <Alert
+                type="success"
+                showIcon
+                style={{ marginTop: 10 }}
+                message={
+                  <span>
+                    Summary
+                    {r.owner_guidance_source === "openai" ? (
+                      <Tag color="purple" style={{ marginLeft: 8 }}>AI</Tag>
+                    ) : (
+                      <Tag style={{ marginLeft: 8 }}>Automatic</Tag>
+                    )}
+                  </span>
+                }
+                description={
+                  <span style={{ whiteSpace: "pre-wrap" }}>{r.owner_guidance}</span>
+                }
+              />
             )}
             {r.vet_feedback && (
               <>

@@ -14,9 +14,13 @@ import { OwnerPets } from "./pages/owner/OwnerPets";
 import { OwnerAppointments } from "./pages/owner/OwnerAppointments";
 import { OwnerCheck } from "./pages/owner/OwnerCheck";
 import { OwnerHistory } from "./pages/owner/OwnerHistory";
+import { OwnerVetApplication } from "./pages/owner/OwnerVetApplication";
+import { OwnerClinic } from "./pages/owner/OwnerClinic";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { LandingPage } from "./pages/LandingPage";
+import { AdminLayout } from "./layouts/AdminLayout";
+import { AdminVetApplications } from "./pages/admin/AdminVetApplications";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export const App: React.FC = () => {
@@ -27,7 +31,19 @@ export const App: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* Vet paneli: sadece vet rolü */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/admin/applications" replace />} />
+          <Route path="applications" element={<AdminVetApplications />} />
+        </Route>
+
+        {/* Vet panel: vet role only */}
         <Route
           path="/vet"
           element={
@@ -46,7 +62,7 @@ export const App: React.FC = () => {
           <Route path="risk" element={<VetRisk />} />
         </Route>
 
-        {/* Owner paneli: sadece pet_owner rolü */}
+        {/* Owner panel: pet_owner role only */}
         <Route
           path="/owner"
           element={
@@ -60,6 +76,8 @@ export const App: React.FC = () => {
           <Route path="appointments" element={<OwnerAppointments />} />
           <Route path="check" element={<OwnerCheck />} />
           <Route path="history" element={<OwnerHistory />} />
+          <Route path="vet-application" element={<OwnerVetApplication />} />
+          <Route path="clinic" element={<OwnerClinic />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

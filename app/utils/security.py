@@ -16,7 +16,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 RoleType = Literal["vet", "pet_owner", "admin"]
 
-# bcrypt en fazla 72 bayt şifre kabul eder
+
 def _password_bytes(password: str) -> bytes:
     b = password.encode("utf-8")
     return b[:72] if len(b) > 72 else b
@@ -48,7 +48,7 @@ async def get_current_user(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Kimlik doğrulama bilgisi yok",
+            detail="Authentication required",
         )
     token = credentials.credentials
     try:
@@ -56,17 +56,17 @@ async def get_current_user(
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Geçersiz veya süresi dolmuş token",
+            detail="Invalid or expired token",
         )
     email = payload.get("sub")
     role = payload.get("role")
     if not email or not role:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Eksik token payload")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
     db = get_db()
     doc = db["users"].find_one({"email": email})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kullanıcı bulunamadı")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
     return {
         "id": str(doc.get("_id")),
@@ -78,7 +78,7 @@ async def get_current_user(
 def require_role(*allowed_roles: RoleType):
     async def dependency(current=Depends(get_current_user)):
         if current["role"] not in allowed_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz erişim")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return current
 
     return dependency

@@ -6,6 +6,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db.mongo import get_db
+from app.utils.clinic_scope import owner_user_ids_for_vet, vet_may_access_owner
 from app.utils.sanitize import sanitize_optional_text, sanitize_text
 from app.utils.security import get_current_user, require_role
 from models.symptom_report import (
@@ -39,6 +40,8 @@ def _to_public(
         system_inferred_symptoms=doc.get("system_inferred_symptoms", []),
         system_matched_symptoms=doc.get("system_matched_symptoms", []),
         system_matched_records=doc.get("system_matched_records", 0),
+        owner_guidance=doc.get("owner_guidance"),
+        owner_guidance_source=doc.get("owner_guidance_source"),
         created_at=doc.get("created_at"),
         vet_feedback=doc.get("vet_feedback"),
         vet_feedback_at=doc.get("vet_feedback_at"),
@@ -55,13 +58,13 @@ async def create_report(
 ):
     """Evcil hayvan sahibi ön kontrolden sonra bildirimi kaydeder."""
     if current["role"] != "pet_owner":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sadece evcil hayvan sahibi bildirim oluşturabilir.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can create symptom reports.")
 
     db = get_db()
     pets = db["pets"]
     pet = pets.find_one({"_id": ObjectId(payload.pet_id)})
     if not pet or pet.get("owner_id") != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu evcil hayvana erişim yok.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this pet.")
 
     now = datetime.now(timezone.utc)
     symptoms_clean = [sanitize_text(s, 200) or "" for s in (payload.symptoms or []) if s]
@@ -80,6 +83,8 @@ async def create_report(
         "system_inferred_symptoms": payload.system_inferred_symptoms,
         "system_matched_symptoms": payload.system_matched_symptoms,
         "system_matched_records": payload.system_matched_records,
+        "owner_guidance": sanitize_optional_text(payload.owner_guidance, 4000),
+        "owner_guidance_source": sanitize_optional_text(payload.owner_guidance_source, 32),
         "created_at": now,
         "vet_feedback": None,
         "vet_feedback_at": None,
@@ -102,7 +107,9 @@ async def list_reports(
 
     if current["role"] == "pet_owner":
         query["owner_id"] = current["id"]
-    # vet/admin: query boş, hepsini listele
+    elif current["role"] == "vet":
+        owners = owner_user_ids_for_vet(db, current["id"])
+        query["owner_id"] = {"$in": owners}
 
     docs = list(col.find(query).sort("created_at", -1).limit(limit))
     pets = {str(p["_id"]): p for p in db["pets"].find({}, {"name": 1})}
@@ -146,11 +153,16 @@ async def set_vet_feedback(
     try:
         oid = ObjectId(report_id)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bildirim bulunamadı.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
     doc = col.find_one({"_id": oid})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bildirim bulunamadı.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+
+    if current["role"] == "vet" and not vet_may_access_owner(
+        db, current["id"], str(doc.get("owner_id", ""))
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This report is outside your clinic scope.")
 
     now = datetime.now(timezone.utc)
     vet_feedback_clean = sanitize_text(payload.vet_feedback, 2000) or ""

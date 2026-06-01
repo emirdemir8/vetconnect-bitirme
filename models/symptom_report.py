@@ -20,6 +20,11 @@ class SymptomReportCreate(BaseModel):
     system_inferred_symptoms: list[str] = Field(default_factory=list)
     system_matched_symptoms: list[str] = Field(default_factory=list)
     system_matched_records: int = 0
+    owner_guidance: str | None = None
+    owner_guidance_source: str | None = Field(
+        default=None,
+        description="openai | template",
+    )
 
 
 class SymptomReportVetFeedback(BaseModel):
@@ -42,6 +47,8 @@ class SymptomReportPublic(BaseModel):
     system_inferred_symptoms: list[str]
     system_matched_symptoms: list[str]
     system_matched_records: int
+    owner_guidance: str | None = None
+    owner_guidance_source: str | None = None
     created_at: datetime | None
     vet_feedback: str | None
     vet_feedback_at: datetime | None

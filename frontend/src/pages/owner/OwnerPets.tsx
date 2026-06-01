@@ -205,37 +205,62 @@ export const OwnerPets: React.FC = () => {
   }
 
   async function handleSubmit() {
-    const values = await form.validateFields();
-    const payload = {
-      name: values.name,
-      species: values.species,
-      breed: values.breed || null,
-      sex: values.sex || null,
-      date_of_birth: values.date_of_birth ? values.date_of_birth.format("YYYY-MM-DD") : null,
-      weight_kg: values.weight_kg ?? null,
-      microchip: values.microchip || null,
-      notes: values.notes || null,
-      card_color: values.card_color || null,
-      avatar_emoji: values.avatar_emoji || null,
-      vaccine_history: vaccineRows
-        .filter((r) => r.vaccine_type)
-        .filter((r) => r.status !== "done" || r.vaccinated_at)
-        .map((r) => ({
-          vaccine_type: r.vaccine_type,
-          status: r.status,
-          vaccinated_at: r.vaccinated_at || null,
-        })),
-      image_url: values.image_url?.trim() || null,
-    };
-    if (editingPet) {
-      await api.put(`/pets/${editingPet.id}`, payload);
-      message.success("Record updated. All data including vaccine info has been saved.");
-    } else {
-      await api.post("/pets", payload);
-      message.success("Pet added.");
+    try {
+      const values = await form.validateFields();
+      const invalidDone = vaccineRows.filter(
+        (r) => r.vaccine_type && r.status === "done" && !r.vaccinated_at?.trim(),
+      );
+      if (invalidDone.length > 0) {
+        message.error('Enter a date for vaccines marked "Done", or change status to "Planned".');
+        return;
+      }
+      const payload = {
+        name: values.name,
+        species: values.species,
+        breed: values.breed || null,
+        sex: values.sex || null,
+        date_of_birth: values.date_of_birth ? values.date_of_birth.format("YYYY-MM-DD") : null,
+        weight_kg: values.weight_kg ?? null,
+        microchip: values.microchip || null,
+        notes: values.notes || null,
+        card_color: values.card_color || null,
+        avatar_emoji: values.avatar_emoji || null,
+        vaccine_history: vaccineRows
+          .filter((r) => r.vaccine_type)
+          .filter((r) => r.status !== "done" || r.vaccinated_at?.trim())
+          .map((r) => ({
+            vaccine_type: r.vaccine_type,
+            status: r.status,
+            vaccinated_at: r.vaccinated_at?.trim() || null,
+          })),
+        image_url: values.image_url?.trim() || null,
+      };
+      setModalLoading(true);
+      if (editingPet) {
+        await api.put(`/pets/${editingPet.id}`, payload);
+        message.success("Pet updated.");
+      } else {
+        await api.post("/pets", payload);
+        message.success("Pet added.");
+      }
+      setModalOpen(false);
+      await loadPets();
+    } catch (err: unknown) {
+      const ax = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      const detail = ax?.response?.data?.detail;
+      let msg = "Could not save pet.";
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((x: { msg?: string }) => x?.msg || String(x)).join(" ");
+      } else if (ax?.response?.status === 401) {
+        msg = "Your session may have expired. Sign out and sign in again.";
+      }
+      message.error(msg);
+      throw err;
+    } finally {
+      setModalLoading(false);
     }
-    setModalOpen(false);
-    await loadPets();
   }
 
   return (
@@ -366,7 +391,7 @@ export const OwnerPets: React.FC = () => {
         title={editingPet ? "Edit Pet" : "New Pet"}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit()}
         okText="Save"
         cancelText="Cancel"
         width={680}

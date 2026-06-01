@@ -17,7 +17,7 @@ class VaccineEntry(BaseModel):
     @model_validator(mode="after")
     def done_requires_date(self):
         if self.status == "done" and self.vaccinated_at is None:
-            raise ValueError("Yapıldı seçiliyse aşı tarihi zorunludur.")
+            raise ValueError("Vaccination date is required when status is done.")
         return self
 
 

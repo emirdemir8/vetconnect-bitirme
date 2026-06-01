@@ -9,50 +9,68 @@ export const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"vet" | "pet_owner">("pet_owner");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Already logged in: redirect to role-specific dashboard
   if (!authLoading && token && user) {
     if (user.role === "vet") return <Navigate to="/vet/dashboard" replace />;
+    if (user.role === "admin") return <Navigate to="/admin/applications" replace />;
     return <Navigate to="/owner/dashboard" replace />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(false);
     setLoading(true);
     try {
-      await register(email, password, role, fullName.trim() || undefined);
-      nav("/login");
-    } catch (err: any) {
-      if (err?.code === "ERR_NETWORK" || err?.message === "Network Error") {
+      await register(email, password, fullName.trim() || undefined);
+      setSuccess(true);
+      setTimeout(() => nav("/login", { state: { registered: true } }), 800);
+    } catch (err: unknown) {
+      const ax = err as {
+        code?: string;
+        message?: string;
+        response?: { status?: number; data?: { detail?: unknown } };
+      };
+      if (ax?.code === "ERR_NETWORK" || ax?.message === "Network Error") {
         setError(
-          "Cannot connect to server. Did you start the backend? " +
-            "In project folder run: python -m uvicorn app.main:app --reload --port 8000 " +
+          "Could not connect to the server. Is the backend running? From the project folder: " +
+            "python -m uvicorn app.main:app --reload --port 8000 " +
             `(API: ${getApiBaseUrl()})`
         );
         return;
       }
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      const detail = data?.detail;
+      const status = ax?.response?.status;
+      const detail = ax?.response?.data?.detail;
       let msg: string;
       if (Array.isArray(detail)) {
-        msg = detail.map((x: any) => x?.msg || x).join(" ");
+        msg = detail.map((x: { msg?: string }) => x?.msg || String(x)).join(" ");
       } else if (typeof detail === "string") {
         msg = detail;
-      } else if (detail && typeof detail === "object" && typeof (detail as any).message === "string") {
-        msg = (detail as any).message;
       } else if (status === 409) {
         msg = "This email is already registered.";
       } else if (status === 422) {
-        msg = "Invalid input (email format or password at least 6 characters).";
-      } else if (status === 503 || status === 500) {
-        msg = typeof detail === "string" ? detail : "Server error. Check backend console.";
+        msg = "Invalid input (check email format or use a password of at least 8 characters).";
+      } else if (status === 503) {
+        msg =
+          typeof detail === "string"
+            ? detail
+            : "Could not connect to the database. Start the MongoDB service in XAMPP.";
+      } else if (status === 500) {
+        msg = typeof detail === "string" ? detail : "Server error. Check the backend console.";
+      } else if (status === 429) {
+        msg =
+          typeof detail === "string"
+            ? detail
+            : "Too many attempts. Wait a minute and try again.";
+      } else if (status === 502 || status === 504) {
+        msg = "Backend did not respond (check port 8000 and uvicorn).";
       } else {
-        msg = "Registration failed.";
+        const extra =
+          typeof detail === "string" ? detail : status != null ? ` (HTTP ${status})` : "";
+        msg = `Registration failed${extra}.`;
       }
       setError(msg);
     } finally {
@@ -73,8 +91,8 @@ export const RegisterPage: React.FC = () => {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>🐾 Register</h1>
-        <p className="auth-subtitle">Create an account to get started</p>
+        <h1>🐾 Sign up</h1>
+        <p className="auth-subtitle">Create a pet owner account</p>
         <form onSubmit={handleSubmit}>
           <label>
             Email
@@ -83,44 +101,37 @@ export const RegisterPage: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               required
-              placeholder="you@example.com"
+              placeholder="you@email.com"
             />
           </label>
           <label>
-            Full name (optional – shown as owner in vet panel)
+            Full name (optional)
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               type="text"
-              placeholder="e.g. John Smith"
+              placeholder="Full name"
             />
           </label>
           <label>
-            Password (at least 6 characters)
+            Password (at least 8 characters)
             <input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               required
-              minLength={6}
+              minLength={8}
               placeholder="••••••••"
             />
           </label>
-          <label>
-            Role
-            <select
-              value={role}
-              onChange={(e) =>
-                setRole(e.target.value as "vet" | "pet_owner")
-              }
-            >
-              <option value="pet_owner">Pet Owner</option>
-              <option value="vet">Veterinarian</option>
-            </select>
-          </label>
+          {success && (
+            <div className="auth-error" style={{ background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0" }}>
+              Registration successful. Redirecting to sign in…
+            </div>
+          )}
           {error && <div className="auth-error">{error}</div>}
           <button type="submit" disabled={loading}>
-            {loading ? "Registering…" : "Register"}
+            {loading ? "Saving…" : "Sign up"}
           </button>
         </form>
         <p>

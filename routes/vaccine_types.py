@@ -1,29 +1,38 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/vaccine-types", tags=["vaccine-types"])
 
-# Yaygın aşı türleri; isteğe göre veritabanına taşınabilir
 VACCINE_TYPES = [
-    {"id": "kuduz", "name": "Kuduz (Rabies)"},
-    {"id": "karma_kopek", "name": "Karma Aşı (Köpek - DHPPi/L)"},
-    {"id": "karma_kedi", "name": "Karma Aşı (Kedi - FVRCP)"},
-    {"id": "lösemi_kedi", "name": "Kedi Lösemisi (FeLV)"},
+    {"id": "rabies", "name": "Rabies"},
+    {"id": "dhpp", "name": "DHPP / DHLPP (Dog)"},
+    {"id": "fvrcp", "name": "FVRCP (Cat)"},
+    {"id": "felv", "name": "FeLV (Cat leukemia)"},
     {"id": "lyme", "name": "Lyme (Borrelia)"},
-    {"id": "bordetella", "name": "Bordetella (Kennel Cough)"},
+    {"id": "bordetella", "name": "Bordetella (Kennel cough)"},
     {"id": "leishmania", "name": "Leishmania"},
-    {"id": "corona_kopek", "name": "Köpek Coronavirus"},
+    {"id": "corona_dog", "name": "Canine coronavirus"},
     {"id": "parvovirus", "name": "Parvovirus"},
-    {"id": "distemper", "name": "Distemper (Gençlik)"},
-    {"id": "hepatit", "name": "Hepatit (CAV)"},
-    {"id": "leptospiroz", "name": "Leptospiroz"},
+    {"id": "distemper", "name": "Distemper"},
+    {"id": "hepatitis", "name": "Hepatitis (CAV)"},
+    {"id": "leptospirosis", "name": "Leptospirosis"},
     {"id": "parainfluenza", "name": "Parainfluenza"},
-    {"id": "tetanoz", "name": "Tetanoz"},
+    {"id": "tetanus", "name": "Tetanus"},
 ]
+
+OTHER_VACCINE = {"id": "other", "name": "Other (not in list — type your own)"}
 
 
 @router.get("")
-def list_vaccine_types():
-    """Tüm aşı türlerini döndürür (sahip/vet formlarında seçim için)."""
-    return {"items": VACCINE_TYPES}
+def list_vaccine_types(q: str | None = Query(None, max_length=120)):
+    """Vaccine types for owner/vet forms; optional ?q= filters catalog (Other is always included)."""
+    items = list(VACCINE_TYPES)
+    needle = (q or "").strip().lower()
+    if needle:
+        items = [
+            v
+            for v in items
+            if needle in v["name"].lower() or needle in v["id"].replace("_", " ").lower()
+        ]
+    return {"items": [*items, OTHER_VACCINE]}

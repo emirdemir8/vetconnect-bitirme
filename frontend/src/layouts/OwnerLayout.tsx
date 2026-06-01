@@ -6,9 +6,11 @@ import {
   CalendarOutlined,
   HistoryOutlined,
   FileTextOutlined,
+  BankOutlined,
   LogoutOutlined,
   MenuOutlined,
   UserOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +23,18 @@ const MENU_ITEMS = [
   { key: "appointments", icon: <CalendarOutlined />, label: "Book Appointment", path: "/owner/appointments" },
   { key: "check", icon: <HistoryOutlined />, label: "Report Symptom", path: "/owner/check" },
   { key: "history", icon: <FileTextOutlined />, label: "History", path: "/owner/history" },
+  {
+    key: "vet-application",
+    icon: <SafetyCertificateOutlined />,
+    label: "Vet application",
+    path: "/owner/vet-application",
+  },
+  {
+    key: "clinic",
+    icon: <BankOutlined />,
+    label: "My clinic",
+    path: "/owner/clinic",
+  },
 ];
 
 export const OwnerLayout: React.FC = () => {
@@ -43,6 +57,8 @@ export const OwnerLayout: React.FC = () => {
     if (loc.pathname.startsWith("/owner/appointments")) return "appointments";
     if (loc.pathname.startsWith("/owner/check")) return "check";
     if (loc.pathname.startsWith("/owner/history")) return "history";
+    if (loc.pathname.startsWith("/owner/vet-application")) return "vet-application";
+    if (loc.pathname.startsWith("/owner/clinic")) return "clinic";
     return "dashboard";
   })();
 

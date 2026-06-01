@@ -9,7 +9,6 @@ import {
   Typography,
   Tag,
   Button,
-  Alert,
 } from "antd";
 import {
   CalendarOutlined,
@@ -136,8 +135,6 @@ export const VetDashboard: React.FC = () => {
       return bDate - aDate;
     });
   }, [recentCases]);
-
-  const criticalCases = useMemo(() => sortedRecentCases.filter((c) => c.serious === true), [sortedRecentCases]);
 
   const ownerAlerts = useMemo(() => {
     return symptomReports.filter((r) => {

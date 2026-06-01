@@ -4,8 +4,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // API istekleri aynı sunucu üzerinden backend'e yönlendirilir (bağlantı hatası önlenir)
+      // Proxy API routes to FastAPI backend
       "/auth": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/clinics": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/pets": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/appointments": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/vaccine-types": { target: "http://127.0.0.1:8000", changeOrigin: true },
@@ -14,6 +15,8 @@ export default defineConfig({
       "/vet": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/symptom-reports": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/health": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/vet-applications": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/admin": { target: "http://127.0.0.1:8000", changeOrigin: true },
     },
   },
 });

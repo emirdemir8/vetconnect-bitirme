@@ -19,6 +19,7 @@ export const LandingPage: React.FC = () => {
   if (token && user) {
     if (user.role === "vet") return <Navigate to="/vet/dashboard" replace />;
     if (user.role === "pet_owner") return <Navigate to="/owner/dashboard" replace />;
+    if (user.role === "admin") return <Navigate to="/admin/applications" replace />;
     return <Navigate to="/login" replace />;
   }
 

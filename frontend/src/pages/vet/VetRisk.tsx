@@ -26,6 +26,18 @@ interface RiskLevelDef {
 interface RiskTermsResponse {
   levels: RiskLevelDef[];
   serious_levels: string[];
+  ml_ready?: boolean;
+  note?: string;
+}
+
+interface VaccineType {
+  id: string;
+  name: string;
+}
+
+interface SymptomOpt {
+  value: string;
+  label: string;
 }
 
 interface CheckRequest {
@@ -44,6 +56,7 @@ interface CheckResponse {
   matched_records: number;
   reasons: string[];
   inferred_symptoms?: string[];
+  ml_serious_probability?: number | null;
 }
 
 const badgeColorByLevel: Record<number, string> = {
@@ -56,6 +69,8 @@ const badgeColorByLevel: Record<number, string> = {
 
 export const VetRisk: React.FC = () => {
   const [riskInfo, setRiskInfo] = useState<RiskTermsResponse | null>(null);
+  const [vaccineTypes, setVaccineTypes] = useState<VaccineType[]>([]);
+  const [symptomOptions, setSymptomOptions] = useState<SymptomOpt[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +79,14 @@ export const VetRisk: React.FC = () => {
   useEffect(() => {
     async function loadTerms() {
       try {
-        const res = await api.get<RiskTermsResponse>("/vet/risk-terms");
-        setRiskInfo(res.data);
+        const [tRes, vRes, sRes] = await Promise.all([
+          api.get<RiskTermsResponse>("/vet/risk-terms"),
+          api.get<{ items: VaccineType[] }>("/vaccine-types"),
+          api.get<{ items: SymptomOpt[] }>("/vet/symptom-options?limit=500"),
+        ]);
+        setRiskInfo(tRes.data);
+        setVaccineTypes(vRes.data.items || []);
+        setSymptomOptions(sRes.data.items || []);
       } catch {
         // ignore
       }
@@ -75,7 +96,7 @@ export const VetRisk: React.FC = () => {
 
   async function handleAnalyze(values: {
     animal_species?: string;
-    product_or_vaccine?: string;
+    vaccine_id?: string;
     symptoms?: string[];
     free_text?: string;
     adr_no?: string;
@@ -84,13 +105,18 @@ export const VetRisk: React.FC = () => {
     setResult(null);
     const symptoms = (values.symptoms || []).filter(Boolean);
     const free = (values.free_text || "").trim() || null;
-    if (!symptoms.length && !free) {
-      setError("Enter at least one symptom (add tags or type in free text).");
+    if (!values.vaccine_id) {
+      setError("Select a vaccine / product from the list.");
       return;
     }
+    if (!symptoms.length && !free) {
+      setError("Select at least one symptom from the list or add free text.");
+      return;
+    }
+    const vaccine = vaccineTypes.find((v) => v.id === values.vaccine_id);
     const payload: CheckRequest = {
       animal_species: (values.animal_species || "").trim() || null,
-      product_or_vaccine: (values.product_or_vaccine || "").trim() || null,
+      product_or_vaccine: vaccine?.name?.trim() || null,
       symptoms,
       free_text: free,
       adr_no: (values.adr_no || "").trim() || null,
@@ -121,7 +147,8 @@ export const VetRisk: React.FC = () => {
           bodyStyle={{ padding: 24 }}
         >
           <Text type="secondary" style={{ display: "block", marginBottom: 20 }}>
-            Enter animal type and vaccine/medication (if any), then add symptoms as tags or free text. Analysis is based on the TigressADR dataset.
+            Select vaccine and symptoms from lists (dataset-driven). Risk is computed by a TF-IDF + logistic regression
+            model trained on merged CSV files in <Text code>data/</Text> — not keyword rules.
           </Text>
 
           <Form
@@ -133,20 +160,32 @@ export const VetRisk: React.FC = () => {
             <Form.Item name="animal_species" label="Animal type">
               <Input placeholder="e.g. cat, dog" />
             </Form.Item>
-            <Form.Item name="product_or_vaccine" label="Vaccine / medication (if any)">
-              <Input placeholder="e.g. Tigress, rabies vaccine" />
+            <Form.Item
+              name="vaccine_id"
+              label="Vaccine / product (from list)"
+              rules={[{ required: true, message: "Select a vaccine type" }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select vaccine"
+                options={vaccineTypes.map((v) => ({ value: v.id, label: v.name }))}
+              />
             </Form.Item>
             <Form.Item
               name="symptoms"
-              label="Symptoms"
-              extra="Add as tags (press Enter) or use free text below."
+              label="Symptoms (from Animal Symptoms dataset)"
+              extra="Pick from list; optional free text below."
             >
               <Select
-                mode="tags"
-                placeholder="e.g. vomiting, diarrhoea, lethargy"
-                tokenSeparators={[","]}
+                mode="multiple"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="e.g. Vomiting, Pruritus"
+                options={symptomOptions}
                 style={{ width: "100%" }}
-                maxTagCount={20}
+                maxTagCount="responsive"
               />
             </Form.Item>
             <Form.Item name="free_text" label="Free text (optional)">
@@ -194,6 +233,12 @@ export const VetRisk: React.FC = () => {
                   <Text type="secondary">Matching records: </Text>
                   <Text>{result.matched_records}</Text>
                 </div>
+                {result.ml_serious_probability != null && result.ml_serious_probability !== undefined && (
+                  <div style={{ marginBottom: 8 }}>
+                    <Text type="secondary">ML P(serious): </Text>
+                    <Text>{(result.ml_serious_probability * 100).toFixed(1)}%</Text>
+                  </div>
+                )}
                 {result.matched_symptoms.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
                     <Text type="secondary">Matched symptoms: </Text>
@@ -248,6 +293,9 @@ export const VetRisk: React.FC = () => {
             <Text type="secondary">Loading…</Text>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {riskInfo.note && (
+                <Alert type="info" showIcon message={riskInfo.note} style={{ fontSize: 13 }} />
+              )}
               {riskInfo.levels.map((lvl) => (
                 <div
                   key={lvl.id}

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db.mongo import get_db
 from app.utils.sanitize import sanitize_optional_text, sanitize_text
+from app.utils.clinic_scope import owner_user_ids_for_vet, pet_ids_owned_by, vet_may_access_pet
 from app.utils.security import get_current_user, require_role
 from models.case import CaseCreate, CasePublic, CaseUpdate
 from routes.vet import SymptomCheckRequest, check_serious
@@ -37,6 +38,17 @@ async def create_case(
     current=Depends(require_role("vet", "admin")),
 ):
     db = get_db()
+    if current["role"] == "vet":
+        try:
+            poid = ObjectId(payload.pet_id)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pet_id")
+        pet = db["pets"].find_one({"_id": poid})
+        if not pet or not vet_may_access_pet(db, current["id"], pet):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot open a case for this patient (clinic membership).",
+            )
     col = db["cases"]
 
     symptoms_clean = [sanitize_text(s, 200) or "" for s in (payload.symptoms or []) if s]
@@ -82,6 +94,12 @@ async def list_cases(
         if not pet_ids:
             return []
         query["pet_id"] = {"$in": pet_ids}
+    elif current["role"] == "vet":
+        owners = owner_user_ids_for_vet(db, current["id"])
+        pet_ids = pet_ids_owned_by(db, owners)
+        if not pet_ids:
+            return []
+        query["pet_id"] = {"$in": pet_ids}
 
     docs = col.find(query).sort("created_at", -1).limit(limit)
     return [_to_case_public(d) for d in docs]
@@ -104,7 +122,11 @@ async def get_case(case_id: str, current=Depends(get_current_user)):
     if current["role"] == "pet_owner":
         pet = db["pets"].find_one({"_id": ObjectId(doc["pet_id"])})
         if not pet or pet.get("owner_id") != current["id"]:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz erişim")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    elif current["role"] == "vet":
+        pet = db["pets"].find_one({"_id": ObjectId(doc["pet_id"])})
+        if not pet or not vet_may_access_pet(db, current["id"], pet):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return _to_case_public(doc)
 
@@ -125,6 +147,14 @@ async def update_case(
     doc = col.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    if current["role"] == "vet":
+        try:
+            p = db["pets"].find_one({"_id": ObjectId(str(doc.get("pet_id")))})
+        except Exception:
+            p = None
+        if not p or not vet_may_access_pet(db, current["id"], p):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     updates = payload.dict(exclude_unset=True)
     if "symptoms" in updates and updates["symptoms"] is not None:

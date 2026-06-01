@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.mongo import get_db
 from app.utils.sanitize import sanitize_optional_text
+from app.utils.clinic_scope import owner_user_ids_for_vet, vet_may_access_owner
 from app.utils.security import get_current_user
 from models.appointment import AppointmentCreate, AppointmentPublic, AppointmentUpdate
 
@@ -33,9 +34,14 @@ def _doc_to_public(doc, pets_by_id=None) -> AppointmentPublic:
 async def list_appointments(current=Depends(get_current_user)):
     db = get_db()
     col = db["appointments"]
-    query = {}
+    query: dict = {}
     if current["role"] == "pet_owner":
         query["owner_id"] = current["id"]
+    elif current["role"] == "vet":
+        oids = owner_user_ids_for_vet(db, current["id"])
+        if not oids:
+            return []
+        query["owner_id"] = {"$in": oids}
     cursor = col.find(query).sort("scheduled_at", 1).limit(200)
     docs = list(cursor)
     # Pet isimleri için
@@ -57,18 +63,18 @@ async def create_appointment(
     current=Depends(get_current_user),
 ):
     if current["role"] != "pet_owner":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sadece evcil hayvan sahibi randevu oluşturabilir")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can create appointments")
     db = get_db()
     pets = db["pets"]
     try:
         oid = ObjectId(payload.pet_id)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Geçersiz pet_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pet_id")
     pet = pets.find_one({"_id": oid})
     if not pet:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evcil hayvan bulunamadı")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
     if str(pet.get("owner_id")) != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu hayvan size ait değil")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This pet does not belong to you")
     now = datetime.now(timezone.utc)
     doc = {
         "owner_id": current["id"],
@@ -91,12 +97,14 @@ async def get_appointment(appointment_id: str, current=Depends(get_current_user)
     try:
         oid = ObjectId(appointment_id)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Randevu bulunamadı")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     doc = col.find_one({"_id": oid})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Randevu bulunamadı")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     if current["role"] == "pet_owner" and str(doc.get("owner_id")) != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if current["role"] == "vet" and not vet_may_access_owner(db, current["id"], str(doc.get("owner_id", ""))):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This appointment is outside your clinic scope.")
     return _doc_to_public(doc)
 
 
@@ -111,12 +119,14 @@ async def update_appointment(
     try:
         oid = ObjectId(appointment_id)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Randevu bulunamadı")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     doc = col.find_one({"_id": oid})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Randevu bulunamadı")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     if current["role"] == "pet_owner" and str(doc.get("owner_id")) != current["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkisiz")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if current["role"] == "vet" and not vet_may_access_owner(db, current["id"], str(doc.get("owner_id", ""))):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This appointment is outside your clinic scope.")
     updates = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
     if "reason" in updates and updates["reason"] is not None:
         updates["reason"] = sanitize_optional_text(updates["reason"], 500) or ""

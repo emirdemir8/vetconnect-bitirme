@@ -14,6 +14,7 @@ export const LoginPage: React.FC = () => {
   // Already logged in: redirect to role-specific dashboard
   if (!authLoading && token && user) {
     if (user.role === "vet") return <Navigate to="/vet/dashboard" replace />;
+    if (user.role === "admin") return <Navigate to="/admin/applications" replace />;
     return <Navigate to="/owner/dashboard" replace />;
   }
 
