@@ -100,6 +100,9 @@ export const LoginPage: React.FC = () => {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
+        <p style={{ marginTop: 12 }}>
+          <Link to="/forgot-password">Forgot your password?</Link>
+        </p>
         <p>
           Don't have an account? <Link to="/register">Register</Link>
         </p>

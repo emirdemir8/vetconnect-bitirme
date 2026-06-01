@@ -14,6 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import settings
 from app.middleware.security import SecurityHeadersMiddleware
 from app.utils.rate_limit import limiter
+from routes.admin_users import router as admin_users_router
 from routes.appointments import router as appointments_router
 from routes.auth import router as auth_router
 from routes.clinics import router as clinics_router
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(vet_router)
     app.include_router(vet_applications_router)
     app.include_router(vet_applications_admin_router)
+    app.include_router(admin_users_router)
 
     import pathlib
 

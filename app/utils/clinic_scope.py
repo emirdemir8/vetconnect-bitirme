@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
+
 from bson import ObjectId
 from bson.errors import InvalidId
 
@@ -13,8 +16,53 @@ def _oid(s: str | None) -> ObjectId | None:
         return None
 
 
+def normalize_network_key(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    if not s:
+        return None
+    s = re.sub(r"[^a-z0-9_]", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s[:40] if s else None
+
+
 def clinic_exists(db, clinic_id: ObjectId) -> bool:
     return db["clinics"].find_one({"_id": clinic_id}, {"_id": 1}) is not None
+
+
+def approved_clinic_ids(db) -> set[ObjectId]:
+    """Yalnızca admin onaylı bir veteriner (klinik sahibi) atanmış klinikleri 'gerçek/açık' sayar.
+
+    Bu sayede pet sahiplerine boş ya da onaysız klinikler listelenmez (rastgele listeleme önlenir).
+    """
+    raw = db["users"].distinct("clinic_id", {"role": "vet", "clinic_id": {"$ne": None}})
+    out: set[ObjectId] = set()
+    for cid in raw:
+        oid = cid if isinstance(cid, ObjectId) else _oid(str(cid))
+        if oid is not None:
+            out.add(oid)
+    return out
+
+
+def find_clinic_by_name(db, name: str) -> ObjectId | None:
+    """Aynı isimli klinik kaydını (büyük/küçük harf duyarsız) bulur."""
+    n = (name or "").strip()
+    if not n:
+        return None
+    doc = db["clinics"].find_one(
+        {"name": {"$regex": f"^{re.escape(n)}$", "$options": "i"}}, {"_id": 1}
+    )
+    return doc["_id"] if doc else None
+
+
+def create_clinic_record(db, name: str, network_key: str | None = None) -> ObjectId:
+    """Yeni klinik kaydı oluşturur ve ObjectId döner."""
+    doc: dict = {"name": (name or "").strip(), "created_at": datetime.now(timezone.utc).isoformat()}
+    nk = normalize_network_key(network_key)
+    if nk:
+        doc["network_key"] = nk
+    return db["clinics"].insert_one(doc).inserted_id
 
 
 def user_clinic_id(db, user_id: str) -> ObjectId | None:

@@ -1,13 +1,15 @@
 import React, { useState } from "react";
-import { Layout, Menu, Tag, Button, Drawer } from "antd";
-import { AuditOutlined, LogoutOutlined, MenuOutlined } from "@ant-design/icons";
+import { Layout, Menu, Tag, Button, Drawer, Dropdown } from "antd";
+import { AuditOutlined, LogoutOutlined, MenuOutlined, TeamOutlined, LockOutlined } from "@ant-design/icons";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ChangePasswordModal } from "../components/ChangePasswordModal";
 
 const { Header, Sider, Content } = Layout;
 
 const MENU_ITEMS = [
   { key: "applications", icon: <AuditOutlined />, label: "Vet applications", path: "/admin/applications" },
+  { key: "users", icon: <TeamOutlined />, label: "Users", path: "/admin/users" },
 ];
 
 export const AdminLayout: React.FC = () => {
@@ -15,8 +17,9 @@ export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pwModalOpen, setPwModalOpen] = useState(false);
 
-  const selectedKey = loc.pathname.startsWith("/admin/applications") ? "applications" : "applications";
+  const selectedKey = loc.pathname.startsWith("/admin/users") ? "users" : "applications";
 
   const menuContent = (
     <Menu
@@ -63,9 +66,26 @@ export const AdminLayout: React.FC = () => {
             Admin dashboard
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ color: "var(--text-secondary)", fontSize: 14 }} title={user?.email}>
-              {user?.email}
-            </span>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: "password",
+                    icon: <LockOutlined />,
+                    label: "Change password",
+                    onClick: () => setPwModalOpen(true),
+                  },
+                ],
+              }}
+              trigger={["click"]}
+            >
+              <span
+                style={{ color: "var(--text-secondary)", fontSize: 14, cursor: "pointer", padding: "4px 8px", borderRadius: 6 }}
+                title={user?.email}
+              >
+                {user?.email}
+              </span>
+            </Dropdown>
             <Tag color="purple">Admin</Tag>
             <Button
               type="primary"
@@ -98,6 +118,8 @@ export const AdminLayout: React.FC = () => {
       >
         {menuContent}
       </Drawer>
+
+      <ChangePasswordModal open={pwModalOpen} onClose={() => setPwModalOpen(false)} />
 
       <style>{`
         @media (max-width: 991px) {

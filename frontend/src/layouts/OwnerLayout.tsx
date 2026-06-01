@@ -10,10 +10,12 @@ import {
   LogoutOutlined,
   MenuOutlined,
   UserOutlined,
+  LockOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ChangePasswordModal } from "../components/ChangePasswordModal";
 
 const { Header, Sider, Content } = Layout;
 
@@ -43,6 +45,7 @@ export const OwnerLayout: React.FC = () => {
   const { user, logout, updateProfile } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nameModalOpen, setNameModalOpen] = useState(false);
+  const [pwModalOpen, setPwModalOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
 
   async function saveDisplayName() {
@@ -123,6 +126,12 @@ export const OwnerLayout: React.FC = () => {
                         setNameModalOpen(true);
                       },
                     },
+                    {
+                      key: "password",
+                      icon: <LockOutlined />,
+                      label: "Change password",
+                      onClick: () => setPwModalOpen(true),
+                    },
                   ],
                 }}
                 trigger={["click"]}
@@ -188,6 +197,8 @@ export const OwnerLayout: React.FC = () => {
           onPressEnter={saveDisplayName}
         />
       </Modal>
+
+      <ChangePasswordModal open={pwModalOpen} onClose={() => setPwModalOpen(false)} />
 
       <Drawer
         title="🐾 Paws & Care"

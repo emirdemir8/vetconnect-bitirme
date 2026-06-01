@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.db.mongo import get_db
 from app.utils.audit import record_audit
-from app.utils.clinic_scope import clinic_exists
+from app.utils.clinic_scope import clinic_exists, create_clinic_record, find_clinic_by_name
 from app.utils.sanitize import sanitize_optional_text
 from app.utils.security import get_current_user, require_role
 
@@ -47,7 +47,15 @@ class VetApplicationRejectIn(BaseModel):
 
 
 class VetApplicationApproveIn(BaseModel):
-    clinic_id: str = Field(..., min_length=24, max_length=24, description="Veterinerin atanacağı klinik ObjectId")
+    clinic_id: str | None = Field(
+        default=None,
+        description="Mevcut bir kliniğe ata (ObjectId). Boş bırakılırsa başvurudaki klinik adından yeni klinik oluşturulur.",
+    )
+    network_key: str | None = Field(
+        default=None,
+        max_length=40,
+        description="Yeni klinik oluşturulurken opsiyonel ağ etiketi (aynı etiketli şubeler veri paylaşır).",
+    )
 
 
 def _doc_to_out(doc: dict) -> VetApplicationOut:
@@ -147,12 +155,6 @@ def admin_approve_vet_application(
 ):
     db = get_db()
     try:
-        coid = ObjectId(body.clinic_id.strip())
-    except InvalidId:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid clinic_id.")
-    if not clinic_exists(db, coid):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Clinic not found.")
-    try:
         oid = ObjectId(application_id)
     except InvalidId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid application id.")
@@ -162,6 +164,26 @@ def admin_approve_vet_application(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Pending application not found or already processed.",
         )
+
+    # Klinik çözümleme: mevcut clinic_id verildiyse ona ata; aksi halde başvurudaki
+    # klinik adından (varsa mevcut aynı isimli klinik, yoksa yeni) bir kayıt kullan.
+    if body.clinic_id and body.clinic_id.strip():
+        try:
+            coid = ObjectId(body.clinic_id.strip())
+        except InvalidId:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid clinic_id.")
+        if not clinic_exists(db, coid):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Clinic not found.")
+    else:
+        clinic_name = (app_doc.get("clinic_name") or "").strip()
+        if len(clinic_name) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Application has no valid clinic name; select an existing clinic instead.",
+            )
+        existing = find_clinic_by_name(db, clinic_name)
+        coid = existing or create_clinic_record(db, clinic_name, body.network_key)
+
     now = datetime.now(timezone.utc).isoformat()
     reviewer = current.get("email", "admin")
     user_oid = app_doc["user_id"]

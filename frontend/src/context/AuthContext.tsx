@@ -19,6 +19,8 @@ interface AuthContextValue {
   register: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => void;
   updateProfile: (fullName: string | null) => Promise<void>;
+  /** Change own password while logged in */
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   /** Pet owner: clinic membership (clinic_id ObjectId or null to clear) */
   updateClinic: (clinicId: string | null) => Promise<void>;
   /** Refresh user from /auth/me (e.g. after role approval) */
@@ -98,6 +100,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(mapMe(res.data));
   }
 
+  async function changePassword(oldPassword: string, newPassword: string) {
+    await api.post("/auth/change-password", { old_password: oldPassword, new_password: newPassword });
+  }
+
   async function updateClinic(clinicId: string | null) {
     const res = await api.patch("/auth/me", { clinic_id: clinicId });
     setUser(mapMe(res.data));
@@ -112,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, login, register, logout, updateProfile, updateClinic, refreshUser }}
+      value={{ user, token, loading, login, register, logout, updateProfile, changePassword, updateClinic, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

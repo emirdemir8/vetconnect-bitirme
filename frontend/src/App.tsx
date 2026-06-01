@@ -18,9 +18,12 @@ import { OwnerVetApplication } from "./pages/owner/OwnerVetApplication";
 import { OwnerClinic } from "./pages/owner/OwnerClinic";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { LandingPage } from "./pages/LandingPage";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { AdminVetApplications } from "./pages/admin/AdminVetApplications";
+import { AdminUsers } from "./pages/admin/AdminUsers";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export const App: React.FC = () => {
@@ -30,6 +33,8 @@ export const App: React.FC = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         <Route
           path="/admin"
@@ -41,6 +46,7 @@ export const App: React.FC = () => {
         >
           <Route index element={<Navigate to="/admin/applications" replace />} />
           <Route path="applications" element={<AdminVetApplications />} />
+          <Route path="users" element={<AdminUsers />} />
         </Route>
 
         {/* Vet panel: vet role only */}

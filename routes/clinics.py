@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,21 +7,11 @@ from pydantic import BaseModel, Field
 
 from app.db.mongo import get_db
 from app.utils.clinic_membership import build_clinic_membership_options
+from app.utils.clinic_scope import approved_clinic_ids, normalize_network_key
 from app.utils.sanitize import sanitize_text
 from app.utils.security import get_current_user, require_role
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
-
-
-def _normalize_network_key(raw: str | None) -> str | None:
-    if raw is None:
-        return None
-    s = str(raw).strip().lower()
-    if not s:
-        return None
-    s = re.sub(r"[^a-z0-9_]", "_", s)
-    s = re.sub(r"_+", "_", s).strip("_")
-    return s[:40] if s else None
 
 
 class ClinicOut(BaseModel):
@@ -59,9 +48,19 @@ def list_membership_options(current=Depends(get_current_user)):
 
 @router.get("", response_model=list[ClinicOut])
 def list_clinics(current=Depends(get_current_user)):
-    """Giriş yapmış kullanıcılar klinik listesini görür (üyelik seçimi için)."""
+    """Klinik listesi.
+
+    Admin tüm klinikleri görür (başvuru onayında atama için); diğer kullanıcılar
+    yalnızca admin onaylı bir veterineri olan klinikleri görür.
+    """
     db = get_db()
-    cur = db["clinics"].find({}).sort("name", 1).limit(200)
+    query: dict = {}
+    if current["role"] != "admin":
+        approved = approved_clinic_ids(db)
+        if not approved:
+            return []
+        query = {"_id": {"$in": list(approved)}}
+    cur = db["clinics"].find(query).sort("name", 1).limit(200)
     return [
         ClinicOut(
             id=str(d["_id"]),
@@ -78,7 +77,7 @@ def create_clinic(payload: ClinicCreate, current=Depends(require_role("admin")))
     name = sanitize_text(payload.name, 200) or ""
     if len(name) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Clinic name must be at least 2 characters.")
-    nk = _normalize_network_key(payload.network_key)
+    nk = normalize_network_key(payload.network_key)
     now = datetime.now(timezone.utc).isoformat()
     doc: dict = {"name": name, "created_at": now}
     if nk:

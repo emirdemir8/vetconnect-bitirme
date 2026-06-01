@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Button, Modal, Select, Space, Table, Tag, Typography, Input, message } from "antd";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Modal, Radio, Select, Space, Table, Tag, Typography, Input, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { api } from "../../lib/apiClient";
 
@@ -36,6 +36,10 @@ export const AdminVetApplications: React.FC = () => {
   const [approveId, setApproveId] = useState<string | null>(null);
   const [clinics, setClinics] = useState<ClinicOpt[]>([]);
   const [approveClinicId, setApproveClinicId] = useState<string | undefined>(undefined);
+  const [approveMode, setApproveMode] = useState<"new" | "existing">("new");
+  const [approveNetworkKey, setApproveNetworkKey] = useState("");
+
+  const approveRow = useMemo(() => rows.find((r) => r.id === approveId) || null, [rows, approveId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,19 +79,36 @@ export const AdminVetApplications: React.FC = () => {
   function openApprove(id: string) {
     setApproveId(id);
     setApproveClinicId(undefined);
+    setApproveMode("new");
+    setApproveNetworkKey("");
+  }
+
+  function closeApprove() {
+    setApproveId(null);
+    setApproveClinicId(undefined);
+    setApproveMode("new");
+    setApproveNetworkKey("");
   }
 
   async function confirmApprove() {
-    if (!approveId || !approveClinicId) {
+    if (!approveId) return;
+    if (approveMode === "existing" && !approveClinicId) {
       message.warning("Select a clinic first.");
       return;
     }
+    const payload =
+      approveMode === "existing"
+        ? { clinic_id: approveClinicId }
+        : { network_key: approveNetworkKey.trim() || undefined };
     setBusyId(approveId);
     try {
-      await api.post(`/admin/vet-applications/${approveId}/approve`, { clinic_id: approveClinicId });
-      message.success("Approved; veterinarian assigned to the selected clinic.");
-      setApproveId(null);
-      setApproveClinicId(undefined);
+      await api.post(`/admin/vet-applications/${approveId}/approve`, payload);
+      message.success(
+        approveMode === "existing"
+          ? "Approved; veterinarian assigned to the selected clinic."
+          : "Approved; clinic created from the application and opened to owners.",
+      );
+      closeApprove();
       await load();
     } catch {
       message.error("Approval failed.");
@@ -204,28 +225,62 @@ export const AdminVetApplications: React.FC = () => {
       <Modal
         title="Approve veterinarian"
         open={!!approveId}
-        onCancel={() => {
-          setApproveId(null);
-          setApproveClinicId(undefined);
-        }}
+        onCancel={closeApprove}
         onOk={() => void confirmApprove()}
         okText="Approve"
         okButtonProps={{ loading: !!busyId && busyId === approveId }}
       >
         <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          This user is assigned the <strong>vet</strong> role and linked to the clinic you select.
+          This user is assigned the <strong>vet</strong> role and linked to a clinic. The clinic becomes
+          selectable by pet owners only after this approval.
         </Paragraph>
-        <div style={{ marginBottom: 8 }}>Clinic</div>
-        <Select
-          style={{ width: "100%" }}
-          placeholder="Select clinic"
-          value={approveClinicId}
-          onChange={(v) => setApproveClinicId(v)}
-          options={clinics.map((c) => ({
-            value: c.id,
-            label: c.network_key ? `${c.name} (${c.network_key})` : c.name,
-          }))}
-        />
+        <Radio.Group
+          value={approveMode}
+          onChange={(e) => setApproveMode(e.target.value)}
+          style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}
+        >
+          <Radio value="new">Create a new clinic from this application</Radio>
+          <Radio value="existing">Assign to an existing clinic</Radio>
+        </Radio.Group>
+
+        {approveMode === "new" ? (
+          <Space direction="vertical" style={{ width: "100%" }} size="small">
+            <Alert
+              type="info"
+              showIcon
+              message={
+                <span>
+                  Clinic to be created: <strong>{approveRow?.clinic_name || "—"}</strong>
+                </span>
+              }
+            />
+            <div>
+              <div style={{ marginBottom: 6 }}>Network tag (optional)</div>
+              <Input
+                placeholder="e.g. paws — branches sharing this tag share vet data"
+                value={approveNetworkKey}
+                onChange={(e) => setApproveNetworkKey(e.target.value)}
+                maxLength={40}
+              />
+            </div>
+          </Space>
+        ) : (
+          <div>
+            <div style={{ marginBottom: 8 }}>Clinic</div>
+            <Select
+              style={{ width: "100%" }}
+              showSearch
+              optionFilterProp="label"
+              placeholder="Select clinic"
+              value={approveClinicId}
+              onChange={(v) => setApproveClinicId(v)}
+              options={clinics.map((c) => ({
+                value: c.id,
+                label: c.network_key ? `${c.name} (${c.network_key})` : c.name,
+              }))}
+            />
+          </div>
+        )}
       </Modal>
       <Modal
         title="Reject application"

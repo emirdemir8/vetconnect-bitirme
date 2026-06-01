@@ -53,6 +53,22 @@ class Settings:
         ]
         self.force_https: bool = os.getenv("FORCE_HTTPS", "").strip() == "1"
 
+        # Uygulamanın herkese açık adresi (parola sıfırlama linkleri bununla kurulur)
+        self.app_base_url: str = os.getenv("APP_BASE_URL", "http://localhost:5173").strip().rstrip("/")
+
+        # Parola sıfırlama token süresi (dakika)
+        self.password_reset_expire_minutes: int = int(
+            os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30")
+        )
+
+        # SMTP (parola sıfırlama e-postası). Boşsa e-posta gönderilmez; geliştirmede link yanıtta döner.
+        self.smtp_host: str = os.getenv("SMTP_HOST", "").strip()
+        self.smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user: str = os.getenv("SMTP_USER", "").strip()
+        self.smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+        self.smtp_from: str = os.getenv("SMTP_FROM", "").strip() or (os.getenv("SMTP_USER", "").strip())
+        self.smtp_tls: bool = os.getenv("SMTP_TLS", "1").strip() != "0"
+
         # İsteğe bağlı: sahip özeti için OpenAI uyumlu Chat Completions API
         self.openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
         self.openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
@@ -62,6 +78,10 @@ class Settings:
     @property
     def is_production(self) -> bool:
         return self.env in ("production", "prod")
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
     def cors_origins_list(self) -> list[str]:
         extra = [s.strip() for s in os.getenv("CORS_ORIGINS", "").split(",") if s.strip()]

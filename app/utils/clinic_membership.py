@@ -8,8 +8,16 @@ def build_clinic_membership_options(db) -> list[dict]:
     """
     Aynı network_key'e sahip klinikler tek satır.
     Sahip kaydına yazılacak clinic_id: grupta adı alfabetik ilk şube (tutarlı canonical).
+
+    Yalnızca admin onaylı bir veterineri (klinik sahibi) olan klinikler listelenir;
+    boş/onaysız klinikler pet sahiplerine gösterilmez.
     """
-    clinics = list(db["clinics"].find({}).sort("name", 1))
+    from app.utils.clinic_scope import approved_clinic_ids
+
+    approved = approved_clinic_ids(db)
+    if not approved:
+        return []
+    clinics = [c for c in db["clinics"].find({}).sort("name", 1) if c["_id"] in approved]
     by_nk: dict[str, list] = defaultdict(list)
     solo: list = []
     for c in clinics:

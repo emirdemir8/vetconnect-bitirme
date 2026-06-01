@@ -75,3 +75,12 @@ def ensure_indexes() -> None:
         )
     except Exception as e:
         log.warning("vet_applications kısmi tekil indeks oluşturulamadı: %s", e)
+    try:
+        db["password_resets"].create_index("token_hash", unique=True)
+    except Exception as e:
+        log.warning("password_resets.token_hash index: %s", e)
+    try:
+        # Süresi dolan sıfırlama kayıtlarını MongoDB otomatik temizler.
+        db["password_resets"].create_index("expires_at", expireAfterSeconds=0)
+    except Exception as e:
+        log.warning("password_resets TTL index: %s", e)

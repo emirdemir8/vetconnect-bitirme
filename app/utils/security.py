@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
@@ -15,6 +18,26 @@ from app.db.mongo import get_db
 bearer_scheme = HTTPBearer(auto_error=False)
 
 RoleType = Literal["vet", "pet_owner", "admin"]
+
+
+def generate_reset_token() -> str:
+    """Yüksek entropili, URL-güvenli sıfırlama token'ı."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """Token'ın DB'de saklanacak SHA-256 özeti (ham token saklanmaz)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Admin sıfırlaması için harf+rakam içeren geçici parola üretir."""
+    length = max(10, length)
+    alphabet = string.ascii_letters + string.digits
+    while True:
+        pw = "".join(secrets.choice(alphabet) for _ in range(length))
+        if any(c.isalpha() for c in pw) and any(c.isdigit() for c in pw):
+            return pw
 
 
 _COMMON_PASSWORDS = frozenset(

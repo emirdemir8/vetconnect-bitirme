@@ -81,7 +81,7 @@ export const OwnerClinic: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 20 }}
-        message="Pets from owners who select the same clinic appear only in that clinic's assigned veterinarians' panel. Branches in the same network are listed in one row; the stored identity is the representative branch chosen for the network."
+        message="Only clinics with an admin-approved veterinarian appear here. Pets from owners who select the same clinic are visible only to that clinic's assigned veterinarians. Branches in the same network are listed in one row."
       />
       <Card>
         <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -89,31 +89,42 @@ export const OwnerClinic: React.FC = () => {
             <Typography.Text type="secondary">Current clinic</Typography.Text>
             <div style={{ fontWeight: 600 }}>{user?.clinic_name || "— not selected —"}</div>
           </div>
-          <div>
-            <Typography.Text>Clinic you want to join</Typography.Text>
-            <Select
-              style={{ width: "100%", marginTop: 8 }}
-              allowClear
-              placeholder="Select a clinic or network"
-              value={value}
-              onChange={(v) => setValue(v)}
-              options={selectOptions}
-              optionRender={(opt) => {
-                const row = options.find((o) => o.clinic_id === opt.value);
-                return (
-                  <div>
-                    <div>{opt.label}</div>
-                    {row?.subtitle ? (
-                      <Typography.Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-                        {row.subtitle}
-                      </Typography.Text>
-                    ) : null}
-                  </div>
-                );
-              }}
+          {options.length === 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="No clinics are open for selection yet"
+              description="A clinic becomes selectable only after its veterinarian (clinic owner) is approved by an administrator. Please check back later."
             />
-          </div>
-          <Button type="primary" onClick={() => void save()} loading={loading}>
+          ) : (
+            <div>
+              <Typography.Text>Clinic you want to join</Typography.Text>
+              <Select
+                style={{ width: "100%", marginTop: 8 }}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select a clinic or network"
+                value={value}
+                onChange={(v) => setValue(v)}
+                options={selectOptions}
+                optionRender={(opt) => {
+                  const row = options.find((o) => o.clinic_id === opt.value);
+                  return (
+                    <div>
+                      <div>{opt.label}</div>
+                      {row?.subtitle ? (
+                        <Typography.Text type="secondary" style={{ fontSize: 12, display: "block" }}>
+                          {row.subtitle}
+                        </Typography.Text>
+                      ) : null}
+                    </div>
+                  );
+                }}
+              />
+            </div>
+          )}
+          <Button type="primary" onClick={() => void save()} loading={loading} disabled={options.length === 0}>
             Save
           </Button>
         </Space>
