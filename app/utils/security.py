@@ -21,17 +21,17 @@ RoleType = Literal["vet", "pet_owner", "admin"]
 
 
 def generate_reset_token() -> str:
-    """Yüksek entropili, URL-güvenli sıfırlama token'ı."""
+    """High-entropy, URL-safe reset token."""
     return secrets.token_urlsafe(32)
 
 
 def hash_token(token: str) -> str:
-    """Token'ın DB'de saklanacak SHA-256 özeti (ham token saklanmaz)."""
+    """SHA-256 digest of the token to be stored in the DB (the raw token is not stored)."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def generate_temp_password(length: int = 12) -> str:
-    """Admin sıfırlaması için harf+rakam içeren geçici parola üretir."""
+    """Generates a temporary password containing letters and digits for admin reset."""
     length = max(10, length)
     alphabet = string.ascii_letters + string.digits
     while True:
@@ -51,7 +51,7 @@ _COMMON_PASSWORDS = frozenset(
 
 
 def validate_password_strength(password: str, *, email: str | None = None) -> str | None:
-    """Parola yeterince güçlü değilse hata mesajı (str), uygunsa None döner."""
+    """Returns an error message (str) if the password is not strong enough, or None if it is acceptable."""
     if not isinstance(password, str):
         return "Password must be text."
     pw = password.strip()

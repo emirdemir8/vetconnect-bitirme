@@ -93,7 +93,7 @@ def list_symptom_options(limit: int = Query(2000, ge=20, le=2000)):
 
 @router.get("/ml-model-status")
 def ml_model_status():
-    """Model eğitimi ve doğrulama özeti."""
+    """Model training and validation summary."""
     pred = get_serious_predictor()
     if not pred.ready:
         return {
@@ -113,8 +113,8 @@ def ml_model_status():
 @router.post("/check-serious", response_model=SymptomCheckResponse)
 def check_serious(payload: SymptomCheckRequest):
     """
-    CSV birleşik veri seti üzerinde eğitilmiş TF-IDF + lojistik regresyon ile
-    Serious (Y/N) olasılığı ve risk seviyesi.
+    Serious (Y/N) probability and risk level using TF-IDF + logistic regression
+    trained on the merged CSV dataset.
     """
     pred = get_serious_predictor()
     if not pred.ready:
@@ -197,7 +197,7 @@ def check_serious(payload: SymptomCheckRequest):
 @router.get("/risk-terms")
 def risk_terms():
     """
-    Geriye dönük uyumluluk: risk seviyelerinin anlamı (artık anahtar kelime listesi kullanılmıyor).
+    Backward compatibility: meaning of the risk levels (a keyword list is no longer used).
     """
     pred = get_serious_predictor()
     return {

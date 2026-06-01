@@ -85,7 +85,7 @@ async def list_cases(
     if serious is not None:
         query["serious"] = serious
 
-    # Pet owner ise sadece kendi pet'lerine ait vakaları görebilsin
+    # If pet owner, they can only see cases belonging to their own pets
     if current["role"] == "pet_owner":
         pet_ids = [
             str(p["_id"])
@@ -118,7 +118,7 @@ async def get_case(case_id: str, current=Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
-    # Pet owner ise sahip olmadığı pet'in vakasını göremesin
+    # If pet owner, they cannot view a case for a pet they do not own
     if current["role"] == "pet_owner":
         pet = db["pets"].find_one({"_id": ObjectId(doc["pet_id"])})
         if not pet or pet.get("owner_id") != current["id"]:

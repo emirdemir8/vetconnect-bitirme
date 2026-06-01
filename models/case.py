@@ -6,13 +6,13 @@ from pydantic import BaseModel, Field
 
 
 class CaseBase(BaseModel):
-    pet_id: str = Field(..., description="İlgili pet ID")
-    adr_no: str | None = Field(default=None, description="Varsa Tigress ADRNo")
-    symptoms: list[str] = Field(..., min_items=1, description="Girilen semptomlar")
+    pet_id: str = Field(..., description="Related pet ID")
+    adr_no: str | None = Field(default=None, description="Tigress ADRNo, if available")
+    symptoms: list[str] = Field(..., min_items=1, description="Entered symptoms")
     vet_notes: str | None = Field(default=None, max_length=4000)
     status: str = Field(
         default="open",
-        description="Vaka durumu (open, in_review, closed vb.)",
+        description="Case status (open, in_review, closed, etc.)",
     )
 
 

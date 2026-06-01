@@ -57,7 +57,7 @@ def list_users(
 
 @router.post("/{user_id}/reset-password", response_model=ResetPasswordResult)
 def admin_reset_password(user_id: str, current=Depends(require_role("admin"))):
-    """Kullanıcıya geçici parola atar ve bir kez admin'e döndürür (kullanıcıya iletilir)."""
+    """Assigns a temporary password to the user and returns it once to the admin (to be relayed to the user)."""
     db = get_db()
     try:
         oid = ObjectId(user_id)
@@ -72,7 +72,7 @@ def admin_reset_password(user_id: str, current=Depends(require_role("admin"))):
         {"_id": oid},
         {"$set": {"password_hash": hash_password(temp), "must_change_password": True}},
     )
-    # Bekleyen sıfırlama token'larını geçersiz kıl.
+    # Invalidate any pending reset tokens.
     db["password_resets"].update_many({"user_id": oid, "used": False}, {"$set": {"used": True}})
 
     record_audit(

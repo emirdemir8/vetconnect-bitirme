@@ -23,7 +23,7 @@ ApplicationStatus = Literal["pending", "approved", "rejected"]
 
 class VetApplicationCreate(BaseModel):
     clinic_name: str = Field(min_length=2, max_length=200)
-    license_reference: str = Field(min_length=2, max_length=120, description="SMVK / diploma / sicil referansı")
+    license_reference: str = Field(min_length=2, max_length=120, description="Veterinary chamber / diploma / registry reference")
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -49,12 +49,12 @@ class VetApplicationRejectIn(BaseModel):
 class VetApplicationApproveIn(BaseModel):
     clinic_id: str | None = Field(
         default=None,
-        description="Mevcut bir kliniğe ata (ObjectId). Boş bırakılırsa başvurudaki klinik adından yeni klinik oluşturulur.",
+        description="Assign to an existing clinic (ObjectId). If left empty, a new clinic is created from the clinic name in the application.",
     )
     network_key: str | None = Field(
         default=None,
         max_length=40,
-        description="Yeni klinik oluşturulurken opsiyonel ağ etiketi (aynı etiketli şubeler veri paylaşır).",
+        description="Optional network tag when creating a new clinic (branches with the same tag share data).",
     )
 
 
@@ -77,7 +77,7 @@ def _doc_to_out(doc: dict) -> VetApplicationOut:
 
 @router.post("", response_model=VetApplicationOut, status_code=status.HTTP_201_CREATED)
 def submit_vet_application(payload: VetApplicationCreate, current=Depends(get_current_user)):
-    """Pet owner veteriner paneli için başvuru oluşturur; admin onayından sonra rol vet olur."""
+    """A pet owner submits an application for the vet panel; the role becomes vet after admin approval."""
     if current["role"] != "pet_owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -125,7 +125,7 @@ def submit_vet_application(payload: VetApplicationCreate, current=Depends(get_cu
 
 @router.get("/me", response_model=VetApplicationOut | None)
 def my_latest_vet_application(current=Depends(get_current_user)):
-    """Giriş yapan kullanıcının en son veteriner başvurusu (yoksa null)."""
+    """The logged-in user's most recent vet application (null if none)."""
     db = get_db()
     doc = db["vet_applications"].find_one(
         {"user_id": ObjectId(current["id"])},
@@ -165,8 +165,8 @@ def admin_approve_vet_application(
             detail="Pending application not found or already processed.",
         )
 
-    # Klinik çözümleme: mevcut clinic_id verildiyse ona ata; aksi halde başvurudaki
-    # klinik adından (varsa mevcut aynı isimli klinik, yoksa yeni) bir kayıt kullan.
+    # Clinic resolution: if an existing clinic_id is provided, assign to it; otherwise use a record
+    # derived from the clinic name in the application (an existing clinic with the same name if any, otherwise a new one).
     if body.clinic_id and body.clinic_id.strip():
         try:
             coid = ObjectId(body.clinic_id.strip())

@@ -8,10 +8,10 @@ from app.core.config import settings
 
 
 def _client_ip(request: Request) -> str:
-    """Rate-limit anahtarı: proxy arkasındaysak X-Forwarded-For'un ilk IP'si, değilse uzak adres.
+    """Rate-limit key: the first IP from X-Forwarded-For if behind a proxy, otherwise the remote address.
 
-    TRUST_PROXY ayarı kapalıyken X-Forwarded-For yok sayılır; aksi halde istemci
-    bu başlığı sahteleyip limiti atlayabilir.
+    When the TRUST_PROXY setting is off, X-Forwarded-For is ignored; otherwise a client
+    could spoof this header and bypass the limit.
     """
     if settings.trust_proxy:
         forwarded = request.headers.get("x-forwarded-for")

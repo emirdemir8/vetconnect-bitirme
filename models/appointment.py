@@ -10,9 +10,9 @@ AppointmentStatus = Literal["pending", "confirmed", "cancelled", "completed"]
 
 
 class AppointmentCreate(BaseModel):
-    pet_id: str = Field(..., description="Evcil hayvan ID")
-    scheduled_at: datetime = Field(..., description="Randevu tarih ve saati")
-    reason: str = Field("", max_length=500, description="Randevu nedeni (kontrol, aşı, vb.)")
+    pet_id: str = Field(..., description="Pet ID")
+    scheduled_at: datetime = Field(..., description="Appointment date and time")
+    reason: str = Field("", max_length=500, description="Appointment reason (checkup, vaccination, etc.)")
 
 
 class AppointmentUpdate(BaseModel):
@@ -29,5 +29,5 @@ class AppointmentPublic(BaseModel):
     reason: str
     status: AppointmentStatus
     created_at: datetime | None = None
-    # Gösterim için
+    # For display
     pet_name: str | None = None

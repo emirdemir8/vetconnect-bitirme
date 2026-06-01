@@ -236,7 +236,7 @@ class ResetPasswordIn(BaseModel):
 
 @router.post("/change-password")
 async def change_password(payload: ChangePasswordIn, current=Depends(get_current_user)):
-    """Giriş yapmış kullanıcı mevcut parolasıyla yeni parola belirler."""
+    """A logged-in user sets a new password using their current password."""
     db = get_db()
     user = db["users"].find_one({"_id": ObjectId(current["id"])})
     if not user:
@@ -263,7 +263,7 @@ async def change_password(payload: ChangePasswordIn, current=Depends(get_current
 @router.post("/forgot-password")
 @limiter.limit("5/minute")
 def forgot_password(request: Request, payload: ForgotPasswordIn):
-    """Sıfırlama linki oluşturur. Kullanıcı sayımını önlemek için her zaman aynı yanıt döner."""
+    """Creates a reset link. Always returns the same response to prevent user enumeration."""
     db = get_db()
     email = bleach.clean(payload.email, strip=True).lower()
     generic = {"detail": "If an account exists for this email, a password reset link has been sent."}
@@ -295,7 +295,7 @@ def forgot_password(request: Request, payload: ForgotPasswordIn):
     sent = send_email(email, "Password reset", body)
 
     resp = dict(generic)
-    # Geliştirmede SMTP yoksa test edebilmek için linki yanıtta döndür.
+    # In development, return the link in the response so it can be tested when SMTP is unavailable.
     if not settings.is_production and not sent:
         resp["dev_reset_link"] = reset_link
     return resp
@@ -304,7 +304,7 @@ def forgot_password(request: Request, payload: ForgotPasswordIn):
 @router.post("/reset-password")
 @limiter.limit("5/minute")
 def reset_password(request: Request, payload: ResetPasswordIn):
-    """Token doğrulanırsa parolayı sıfırlar ve token'ı geçersiz kılar."""
+    """If the token is valid, resets the password and invalidates the token."""
     db = get_db()
     token_hash = hash_token(payload.token.strip())
     rec = db["password_resets"].find_one({"token_hash": token_hash})
@@ -328,7 +328,7 @@ def reset_password(request: Request, payload: ResetPasswordIn):
     )
     now = datetime.now(timezone.utc)
     db["password_resets"].update_one({"_id": rec["_id"]}, {"$set": {"used": True, "used_at": now}})
-    # Aynı kullanıcının diğer bekleyen token'larını da geçersiz kıl.
+    # Also invalidate the same user's other pending tokens.
     db["password_resets"].update_many(
         {"user_id": rec["user_id"], "used": False}, {"$set": {"used": True}}
     )

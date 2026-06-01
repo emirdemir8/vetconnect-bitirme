@@ -25,12 +25,12 @@ class ClinicCreate(BaseModel):
     network_key: str | None = Field(
         default=None,
         max_length=40,
-        description="Opsiyonel ağ etiketi (örn. paws). Aynı etiketli kliniklerde vet verileri paylaşılır.",
+        description="Optional network tag (e.g. paws). Vet data is shared among clinics with the same tag.",
     )
 
 
 class ClinicMembershipOptionOut(BaseModel):
-    """Sahip üyeliği: ağ altındaki şubeler tek seçenek."""
+    """Owner membership: branches within a network are presented as a single option."""
     clinic_id: str
     display_name: str
     subtitle: str = ""
@@ -41,17 +41,17 @@ class ClinicMembershipOptionOut(BaseModel):
 
 @router.get("/membership-options", response_model=list[ClinicMembershipOptionOut])
 def list_membership_options(current=Depends(get_current_user)):
-    """Pet sahibi klinik seçerken aynı ağdaki şubeler birleşik listelenir."""
+    """When a pet owner selects a clinic, branches in the same network are listed together."""
     db = get_db()
     return build_clinic_membership_options(db)
 
 
 @router.get("", response_model=list[ClinicOut])
 def list_clinics(current=Depends(get_current_user)):
-    """Klinik listesi.
+    """Clinic list.
 
-    Admin tüm klinikleri görür (başvuru onayında atama için); diğer kullanıcılar
-    yalnızca admin onaylı bir veterineri olan klinikleri görür.
+    Admins see all clinics (for assignment during application approval); other users
+    only see clinics that have an admin-approved veterinarian.
     """
     db = get_db()
     query: dict = {}

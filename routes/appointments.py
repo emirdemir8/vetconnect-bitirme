@@ -44,7 +44,7 @@ async def list_appointments(current=Depends(get_current_user)):
         query["owner_id"] = {"$in": oids}
     cursor = col.find(query).sort("scheduled_at", 1).limit(200)
     docs = list(cursor)
-    # Pet isimleri için
+    # For pet names
     pet_ids = list({str(d.get("pet_id")) for d in docs if d.get("pet_id")})
     pets_by_id = {}
     for pid in pet_ids:

@@ -96,7 +96,7 @@ def _to_pet_public(doc, owner_email: str | None = None, owner_name: str | None =
 
 
 def _get_owner_map(db, owner_ids: list[str]) -> dict[str, dict]:
-    """owner_id -> { full_name } (veteriner panelinde sadece sahip adı; e-posta gönderilmez)."""
+    """owner_id -> { full_name } (only the owner name in the vet panel; the email is not sent)."""
     if not owner_ids:
         return {}
     from bson import ObjectId

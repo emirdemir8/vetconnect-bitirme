@@ -32,9 +32,9 @@ def clinic_exists(db, clinic_id: ObjectId) -> bool:
 
 
 def approved_clinic_ids(db) -> set[ObjectId]:
-    """Yalnızca admin onaylı bir veteriner (klinik sahibi) atanmış klinikleri 'gerçek/açık' sayar.
+    """Counts only clinics with an assigned admin-approved veterinarian (clinic owner) as 'real/open'.
 
-    Bu sayede pet sahiplerine boş ya da onaysız klinikler listelenmez (rastgele listeleme önlenir).
+    This ensures empty or unapproved clinics are not listed to pet owners (preventing arbitrary listing).
     """
     raw = db["users"].distinct("clinic_id", {"role": "vet", "clinic_id": {"$ne": None}})
     out: set[ObjectId] = set()
@@ -46,7 +46,7 @@ def approved_clinic_ids(db) -> set[ObjectId]:
 
 
 def find_clinic_by_name(db, name: str) -> ObjectId | None:
-    """Aynı isimli klinik kaydını (büyük/küçük harf duyarsız) bulur."""
+    """Finds a clinic record with the same name (case-insensitive)."""
     n = (name or "").strip()
     if not n:
         return None
@@ -57,7 +57,7 @@ def find_clinic_by_name(db, name: str) -> ObjectId | None:
 
 
 def create_clinic_record(db, name: str, network_key: str | None = None) -> ObjectId:
-    """Yeni klinik kaydı oluşturur ve ObjectId döner."""
+    """Creates a new clinic record and returns its ObjectId."""
     doc: dict = {"name": (name or "").strip(), "created_at": datetime.now(timezone.utc).isoformat()}
     nk = normalize_network_key(network_key)
     if nk:
@@ -80,8 +80,8 @@ def user_clinic_id(db, user_id: str) -> ObjectId | None:
 
 def clinic_ids_in_vet_scope(db, vet_clinic_id: ObjectId) -> list[ObjectId]:
     """
-    Vet'in bağlı olduğu klinik kaydından ağ (network_key) okunur.
-    Aynı network_key'e sahip tüm klinik id'leri döner; network_key yoksa yalnızca o klinik.
+    Reads the network (network_key) from the clinic record the vet is attached to.
+    Returns all clinic ids sharing the same network_key; if there is no network_key, only that clinic.
     """
     c = db["clinics"].find_one({"_id": vet_clinic_id}, {"network_key": 1})
     if not c:
@@ -93,7 +93,7 @@ def clinic_ids_in_vet_scope(db, vet_clinic_id: ObjectId) -> list[ObjectId]:
 
 
 def owner_user_ids_for_vet(db, vet_user_id: str) -> list[str]:
-    """Vet'in görebileceği pet_owner id'leri (aynı klinik veya aynı network_key altındaki şubeler)."""
+    """pet_owner ids the vet can see (the same clinic or branches under the same network_key)."""
     cid = user_clinic_id(db, vet_user_id)
     if not cid:
         return []
@@ -105,7 +105,7 @@ def owner_user_ids_for_vet(db, vet_user_id: str) -> list[str]:
 
 
 def owner_user_ids_in_clinic(db, clinic_id: ObjectId) -> list[str]:
-    """Yalnızca tek klinik (network kullanmadan)."""
+    """Single clinic only (without using the network)."""
     return [
         str(u["_id"])
         for u in db["users"].find({"clinic_id": clinic_id, "role": "pet_owner"}, {"_id": 1})

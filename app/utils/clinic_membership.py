@@ -1,4 +1,4 @@
-"""Sahip üyelik seçimi: ağ (network_key) bazında gruplanmış klinik seçenekleri."""
+"""Owner membership selection: clinic options grouped by network (network_key)."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -6,11 +6,11 @@ from collections import defaultdict
 
 def build_clinic_membership_options(db) -> list[dict]:
     """
-    Aynı network_key'e sahip klinikler tek satır.
-    Sahip kaydına yazılacak clinic_id: grupta adı alfabetik ilk şube (tutarlı canonical).
+    Clinics sharing the same network_key are shown on a single row.
+    The clinic_id written to the owner record: the alphabetically first branch in the group (consistent canonical).
 
-    Yalnızca admin onaylı bir veterineri (klinik sahibi) olan klinikler listelenir;
-    boş/onaysız klinikler pet sahiplerine gösterilmez.
+    Only clinics that have an admin-approved veterinarian (clinic owner) are listed;
+    empty/unapproved clinics are not shown to pet owners.
     """
     from app.utils.clinic_scope import approved_clinic_ids
 

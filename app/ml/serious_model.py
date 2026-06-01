@@ -1,8 +1,8 @@
 """
-TigressADR + Animal Symptoms + SAR CSV birleşiminden Serious (Y/N) tahmini.
+Serious (Y/N) prediction from the combined TigressADR + Animal Symptoms + SAR CSV data.
 
-Eğitim: TF-IDF metin özellikleri + dengeli lojistik regresyon (scikit-learn).
-Tahmin: kullanıcı semptomları, serbest metin, tür ve seçilen aşı adı tek metin olarak vektörize edilir.
+Training: TF-IDF text features + balanced logistic regression (scikit-learn).
+Prediction: user symptoms, free text, species and the selected vaccine name are vectorized as a single text.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def _user_document(
 
 
 def _proba_to_risk_level(p: float) -> tuple[int, str]:
-    """Olasılığı mevcut arayüz seviyelerine (1–5) eşle."""
+    """Map the probability to the existing UI levels (1–5)."""
     if p >= 0.82:
         return 1, "Level 1: High seriousness probability (approx. 82%+)."
     if p >= 0.62:
@@ -269,7 +269,7 @@ def _train_from_csv() -> SeriousMLPredictor:
 
 
 def get_serious_predictor() -> SeriousMLPredictor:
-    """İlk çağrıda veri setinden eğitir; sonraki çağrılar önbelleği kullanır."""
+    """Trains from the dataset on the first call; subsequent calls use the cache."""
     global _predictor
     if _predictor is not None and _predictor.ready:
         return _predictor
@@ -280,14 +280,14 @@ def get_serious_predictor() -> SeriousMLPredictor:
         try:
             pred = _train_from_csv()
         except Exception as e:
-            logger.exception("ADR ML model eğitilemedi: %s", e)
+            logger.exception("ADR ML model could not be trained: %s", e)
             pred._error = str(e)
         _predictor = pred
         return _predictor
 
 
 def load_symptom_options_from_csv(limit: int = 400) -> list[str]:
-    """Animal Symptoms.csv içinden sık LLT etiketleri (çoklu seçim için)."""
+    """Frequent LLT labels from Animal Symptoms.csv (for multi-select)."""
     path = _ROOT / "data" / "Animal Symptoms.csv"
     if not path.exists():
         return []

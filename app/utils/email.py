@@ -10,10 +10,10 @@ log = logging.getLogger(__name__)
 
 
 def send_email(to_address: str, subject: str, body_text: str) -> bool:
-    """SMTP yapılandırılmışsa düz metin e-posta gönderir.
+    """Sends a plain-text email if SMTP is configured.
 
-    Yapılandırma yoksa ya da gönderim başarısızsa False döner (çağıran taraf
-    geliştirme ortamında token'ı yine de kullanabilir).
+    Returns False if SMTP is not configured or if sending fails (the caller can
+    still use the token in a development environment).
     """
     if not settings.smtp_configured:
         return False
@@ -30,6 +30,6 @@ def send_email(to_address: str, subject: str, body_text: str) -> bool:
                 server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg)
         return True
-    except Exception as e:  # pragma: no cover - ağ/erişim hatalarını yut
-        log.warning("E-posta gönderilemedi (%s): %s", to_address, e)
+    except Exception as e:  # pragma: no cover - swallow network/access errors
+        log.warning("Email could not be sent (%s): %s", to_address, e)
         return False

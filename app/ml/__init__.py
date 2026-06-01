@@ -1,1 +1,1 @@
-"""ML alt paketi. sklearn içeren modüller için: `from app.ml.serious_model import ...`."""
+"""ML subpackage. For modules that use sklearn: `from app.ml.serious_model import ...`."""

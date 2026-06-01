@@ -56,7 +56,7 @@ async def create_report(
     payload: SymptomReportCreate,
     current=Depends(get_current_user),
 ):
-    """Evcil hayvan sahibi ön kontrolden sonra bildirimi kaydeder."""
+    """Saves the report after the pet owner's preliminary check."""
     if current["role"] != "pet_owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can create symptom reports.")
 
@@ -100,7 +100,7 @@ async def list_reports(
     limit: int = Query(100, ge=1, le=500),
     current=Depends(get_current_user),
 ):
-    """Vet tüm sahip bildirimlerini görür; owner sadece kendi bildirimlerini."""
+    """A vet sees all owner reports; an owner sees only their own reports."""
     db = get_db()
     col = db["symptom_reports"]
     query: dict = {}
@@ -113,7 +113,7 @@ async def list_reports(
 
     docs = list(col.find(query).sort("created_at", -1).limit(limit))
     pets = {str(p["_id"]): p for p in db["pets"].find({}, {"name": 1})}
-    # Vet için sadece sahip adı (full_name), e-posta gönderilmez
+    # For the vet, only the owner name (full_name); the email is not sent
     users: dict[str, dict] = {}
     if current["role"] in ("vet", "admin"):
         for d in docs:
@@ -147,7 +147,7 @@ async def set_vet_feedback(
     payload: SymptomReportVetFeedback,
     current=Depends(require_role("vet", "admin")),
 ):
-    """Veteriner bildirime geri bildirim ekler."""
+    """The veterinarian adds feedback to the report."""
     db = get_db()
     col = db["symptom_reports"]
     try:

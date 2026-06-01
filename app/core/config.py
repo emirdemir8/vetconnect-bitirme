@@ -45,7 +45,7 @@ class Settings:
         self.auth_register_limit: str = os.getenv("AUTH_REGISTER_LIMIT", "10/hour")
         self.auth_login_limit: str = os.getenv("AUTH_LOGIN_LIMIT", "5/minute")
 
-        # Ters proxy/yük dengeleyici arkasında ise istemci IP'sini X-Forwarded-For'dan al.
+        # If behind a reverse proxy/load balancer, take the client IP from X-Forwarded-For.
         self.trust_proxy: bool = os.getenv("TRUST_PROXY", "").strip() == "1"
 
         self.trusted_hosts: list[str] = [
@@ -53,15 +53,15 @@ class Settings:
         ]
         self.force_https: bool = os.getenv("FORCE_HTTPS", "").strip() == "1"
 
-        # Uygulamanın herkese açık adresi (parola sıfırlama linkleri bununla kurulur)
+        # The application's public address (password reset links are built from this)
         self.app_base_url: str = os.getenv("APP_BASE_URL", "http://localhost:5173").strip().rstrip("/")
 
-        # Parola sıfırlama token süresi (dakika)
+        # Password reset token lifetime (minutes)
         self.password_reset_expire_minutes: int = int(
             os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30")
         )
 
-        # SMTP (parola sıfırlama e-postası). Boşsa e-posta gönderilmez; geliştirmede link yanıtta döner.
+        # SMTP (password reset email). If empty, no email is sent; in development the link is returned in the response.
         self.smtp_host: str = os.getenv("SMTP_HOST", "").strip()
         self.smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user: str = os.getenv("SMTP_USER", "").strip()
@@ -69,7 +69,7 @@ class Settings:
         self.smtp_from: str = os.getenv("SMTP_FROM", "").strip() or (os.getenv("SMTP_USER", "").strip())
         self.smtp_tls: bool = os.getenv("SMTP_TLS", "1").strip() != "0"
 
-        # İsteğe bağlı: sahip özeti için OpenAI uyumlu Chat Completions API
+        # Optional: OpenAI-compatible Chat Completions API for owner summaries
         self.openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
         self.openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
         raw_base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
@@ -100,17 +100,17 @@ class Settings:
         return out
 
     def validate(self) -> None:
-        """Sunucu ayağa kalkmadan önce çağırın (üretim koruması)."""
+        """Call before the server starts up (production safeguard)."""
         if not self.is_production:
             return
         if self.jwt_secret in _DEV_JWT_SECRETS or len(self.jwt_secret) < 32:
             raise RuntimeError(
-                "Üretim (ENV=production): JWT_SECRET en az 32 karakter ve varsayılan "
-                "değerlerden farklı olmalı (.env dosyasında ayarlayın)."
+                "Production (ENV=production): JWT_SECRET must be at least 32 characters and different "
+                "from the default values (set it in the .env file)."
             )
         if not self.cors_origins_list():
             raise RuntimeError(
-                "Üretim (ENV=production): CORS_ORIGINS zorunludur; virgülle frontend URL'lerini yazın."
+                "Production (ENV=production): CORS_ORIGINS is required; provide comma-separated frontend URLs."
             )
 
 

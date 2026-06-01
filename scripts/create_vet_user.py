@@ -1,8 +1,8 @@
 """
-Güvenilir ortamda veteriner veya admin kullanıcı oluşturur (kayıt API'si artık sadece pet_owner).
+Creates a veterinarian or admin user in a trusted environment (the registration API now only creates pet_owner).
 
-Örnek:
-  python scripts/create_vet_user.py --email vet@clinic.com --password "GüçlüŞifre123"
+Example:
+  python scripts/create_vet_user.py --email vet@clinic.com --password "StrongPass123"
   python scripts/create_vet_user.py --email admin@site.com --password "..." --role admin
 """
 from __future__ import annotations
@@ -24,27 +24,27 @@ from app.utils.security import hash_password  # noqa: E402
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Vet veya admin kullanıcı ekle")
-    p.add_argument("--email", required=True, help="E-posta (küçük harfe normalize edilir)")
-    p.add_argument("--password", required=True, help="Düz metin şifre (bcrypt ile saklanır)")
+    p = argparse.ArgumentParser(description="Add a vet or admin user")
+    p.add_argument("--email", required=True, help="Email (normalized to lowercase)")
+    p.add_argument("--password", required=True, help="Plain-text password (stored with bcrypt)")
     p.add_argument("--role", default="vet", choices=["vet", "admin"])
-    p.add_argument("--full-name", default="", dest="full_name", help="İsteğe bağlı görünen ad")
+    p.add_argument("--full-name", default="", dest="full_name", help="Optional display name")
     p.add_argument(
         "--clinic-id",
         default="",
         dest="clinic_id",
-        help="Vet için MongoDB klinik ObjectId (python scripts ile clinics koleksiyonundan)",
+        help="MongoDB clinic ObjectId for the vet (from the clinics collection via python scripts)",
     )
     args = p.parse_args()
 
     email = bleach.clean(args.email, strip=True).lower()
     if not email:
-        print("Geçersiz e-posta", file=sys.stderr)
+        print("Invalid email", file=sys.stderr)
         sys.exit(2)
 
     db = get_db()
     if db["users"].find_one({"email": email}):
-        print(f"Bu e-posta zaten kayıtlı: {email}", file=sys.stderr)
+        print(f"This email is already registered: {email}", file=sys.stderr)
         sys.exit(1)
 
     fn = (args.full_name or "").strip() or None
@@ -57,20 +57,20 @@ def main() -> None:
     raw_cid = (args.clinic_id or "").strip()
     if raw_cid:
         if args.role != "vet":
-            print("--clinic-id yalnızca --role vet ile kullanılabilir.", file=sys.stderr)
+            print("--clinic-id can only be used with --role vet.", file=sys.stderr)
             sys.exit(2)
         try:
             coid = ObjectId(raw_cid)
         except Exception:
-            print("Geçersiz --clinic-id", file=sys.stderr)
+            print("Invalid --clinic-id", file=sys.stderr)
             sys.exit(2)
         if not db["clinics"].find_one({"_id": coid}, {"_id": 1}):
-            print("Klinik bulunamadı.", file=sys.stderr)
+            print("Clinic not found.", file=sys.stderr)
             sys.exit(2)
         doc["clinic_id"] = coid
 
     db["users"].insert_one(doc)
-    print(f"Tamam: {email} ({args.role})")
+    print(f"Done: {email} ({args.role})")
 
 
 if __name__ == "__main__":

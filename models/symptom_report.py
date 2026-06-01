@@ -6,13 +6,13 @@ from pydantic import BaseModel, Field
 
 
 class SymptomReportCreate(BaseModel):
-    pet_id: str = Field(..., description="Evcil hayvan ID")
+    pet_id: str = Field(..., description="Pet ID")
     animal_species: str | None = None
     product_or_vaccine: str | None = None
     symptoms: list[str] = Field(default_factory=list)
     free_text: str | None = None
     adr_no: str | None = None
-    # Sistem cevabı (check-serious sonucu)
+    # System response (check-serious result)
     system_serious: bool = False
     system_risk_level: int | None = None
     system_risk_label: str | None = None
@@ -52,7 +52,7 @@ class SymptomReportPublic(BaseModel):
     created_at: datetime | None
     vet_feedback: str | None
     vet_feedback_at: datetime | None
-    # Gösterim için (vet listesinde; e-posta vet’e gönderilmez)
+    # For display (in the vet list; the email is not sent to the vet)
     pet_name: str | None = None
     owner_name: str | None = None
     owner_email: str | None = None

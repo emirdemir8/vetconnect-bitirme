@@ -1,15 +1,15 @@
 """
-Serbest metin (yorum) girdisinden semptom ve risk seviyesi çıkarımı.
-Örn: "We have frequent vomitting complaints in my cat" -> emesis (level_3).
-Kelime bazlı exact match yerine eşanlamlılar ve ifade eşlemesi kullanır.
+Infers symptoms and risk level from free-text (comment) input.
+E.g.: "We have frequent vomitting complaints in my cat" -> emesis (level_3).
+Uses synonyms and phrase matching instead of word-based exact matching.
 """
 from __future__ import annotations
 
 import re
 from typing import Any
 
-# Serbest metindeki ifadeleri risk terimlerine (canonical) eşleyen harita.
-# Key: normalize edilmiş ifade veya kelime, Value: RISK_LEVEL_TERMS içindeki canonical terim.
+# Map that links phrases in free text to (canonical) risk terms.
+# Key: normalized phrase or word, Value: canonical term in RISK_LEVEL_TERMS.
 SYNONYM_TO_CANONICAL: dict[str, str] = {
     # level_3 - emesis
     "vomit": "emesis",
@@ -102,7 +102,7 @@ SYNONYM_TO_CANONICAL: dict[str, str] = {
     "infectious disease nos": "infectious disease nos",
 }
 
-# Çok kelimeli ifadeleri önce kontrol etmek için (uzun -> kısa sıra).
+# To check multi-word phrases first (long -> short order).
 PHRASE_ORDER = [
     "death by euthanasia",
     "digestive tract haemorrhage",
@@ -139,22 +139,22 @@ PHRASE_ORDER = [
 
 
 def _normalize(s: str) -> str:
-    """Küçük harf, fazla boşluk temizle, noktalama bırak (kelime içi için)."""
+    """Lowercase, collapse extra whitespace, keep punctuation (for within-word matching)."""
     s = s.lower().strip()
     s = re.sub(r"\s+", " ", s)
     return s
 
 
 def _tokenize(text: str) -> list[str]:
-    """Metni kelimelere böl (noktalama ayır)."""
+    """Split the text into words (separate punctuation)."""
     normalized = _normalize(text)
-    # Kelimeler: harf ve rakam blokları
+    # Words: blocks of letters and digits
     tokens = re.findall(r"[a-z0-9]+", normalized)
     return tokens
 
 
 def _extract_phrases(text: str) -> list[str]:
-    """Metinde geçen çok kelimeli ifadeleri bul (PHRASE_ORDER'a göre)."""
+    """Find multi-word phrases present in the text (based on PHRASE_ORDER)."""
     normalized = _normalize(text)
     found: list[str] = []
     for phrase in PHRASE_ORDER:
@@ -168,10 +168,10 @@ def infer_symptoms_and_levels_from_text(
     risk_level_terms: dict[str, set[str]],
 ) -> tuple[list[str], set[str]]:
     """
-    Serbest metinden çıkarılan canonical semptom listesi ve tetiklenen risk seviyelerini döndürür.
+    Returns the canonical symptom list extracted from free text and the triggered risk levels.
 
-    - Önce çok kelimeli ifadeleri kontrol eder, sonra tek kelimeleri.
-    - Eşanlamlı haritadan canonical terime çevirir, risk seviyesi atar.
+    - Checks multi-word phrases first, then single words.
+    - Converts to a canonical term via the synonym map and assigns a risk level.
     """
     if not free_text or not free_text.strip():
         return [], set()
@@ -181,7 +181,7 @@ def infer_symptoms_and_levels_from_text(
 
     text_norm = _normalize(free_text)
 
-    # 1) Çok kelimeli ifadeler
+    # 1) Multi-word phrases
     for phrase in _extract_phrases(free_text):
         canonical = SYNONYM_TO_CANONICAL.get(phrase)
         if not canonical:
@@ -192,12 +192,12 @@ def infer_symptoms_and_levels_from_text(
                 triggered_levels.add(level)
                 break
 
-    # 2) Tek kelimeler (ve 2 kelimelik birleşimler: "blood stool" gibi)
+    # 2) Single words (and 2-word combinations: e.g. "blood stool")
     tokens = _tokenize(free_text)
     seen_canonical: set[str] = set(inferred_canonical)
 
     for i, t in enumerate(tokens):
-        # tek kelime
+        # single word
         c1 = SYNONYM_TO_CANONICAL.get(t)
         if c1 and c1 not in seen_canonical:
             seen_canonical.add(c1)
@@ -206,7 +206,7 @@ def infer_symptoms_and_levels_from_text(
                 if c1 in terms:
                     triggered_levels.add(level)
                     break
-        # 2 kelime: "blood stool" -> blood in faeces benzeri
+        # 2 words: "blood stool" -> similar to blood in faeces
         if i + 1 < len(tokens):
             two = f"{t} {tokens[i+1]}"
             c2 = SYNONYM_TO_CANONICAL.get(two)
@@ -218,12 +218,12 @@ def infer_symptoms_and_levels_from_text(
                         triggered_levels.add(level)
                         break
 
-    # 3) Metin içinde geçen kelime grupları (örn. "frequent vomiting" -> vomiting)
+    # 3) Word groups appearing in the text (e.g. "frequent vomiting" -> vomiting)
     for key, canonical in SYNONYM_TO_CANONICAL.items():
         if " " in key:
             continue
         if key in text_norm and canonical not in seen_canonical:
-            # Tam kelime sınırında olması tercih edilir
+            # Preferably at a full word boundary
             if re.search(r"\b" + re.escape(key) + r"\b", text_norm):
                 seen_canonical.add(canonical)
                 inferred_canonical.append(canonical)
@@ -236,7 +236,7 @@ def infer_symptoms_and_levels_from_text(
 
 
 def _text_risk_levels(text: str, risk_level_terms: dict[str, set[str]]) -> set[str]:
-    """Bir metinde geçen risk seviyelerini döndürür."""
+    """Returns the risk levels present in a text."""
     levels: set[str] = set()
     tl = text.lower()
     for level, terms in risk_level_terms.items():
@@ -255,14 +255,14 @@ def search_knowledge_base_for_text(
     adr_no: str | None = None,
 ) -> tuple[list[dict[str, Any]], set[str]]:
     """
-    Serbest metindeki kelimelerle vet_knowledge_base'de arama yapar.
-    Dönen: (eşleşen dokümanlar, doküman metinlerinde geçen risk seviyeleri).
+    Searches vet_knowledge_base using the words in the free text.
+    Returns: (matching documents, risk levels present in the document texts).
     """
     tokens = _tokenize(free_text)
     if not tokens:
         return [], set()
 
-    # Anlamlı kelimeler (en az 2 karakter, sadece sayı değil)
+    # Meaningful words (at least 2 characters, not just numbers)
     meaningful = [t for t in tokens if len(t) >= 2 and not t.isdigit()]
     if not meaningful:
         return [], set()

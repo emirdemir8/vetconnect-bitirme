@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class VaccineEntry(BaseModel):
-    vaccine_type: str = Field(..., description="Aşı türü (id veya ad)")
+    vaccine_type: str = Field(..., description="Vaccine type (id or name)")
     status: Literal["done", "planned"] = Field(
         default="done",
-        description="done=yapıldı, planned=yapılacak",
+        description="done=completed, planned=scheduled",
     )
-    vaccinated_at: date | None = Field(default=None, description="Aşı tarihi (yapıldı ise dolu, yapılacak ise planlanan tarih)")
+    vaccinated_at: date | None = Field(default=None, description="Vaccination date (filled in if completed, planned date if scheduled)")
 
     @model_validator(mode="after")
     def done_requires_date(self):
@@ -23,26 +23,26 @@ class VaccineEntry(BaseModel):
 
 class PetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    species: str = Field(..., min_length=1, max_length=50, description="Tür (örn. dog, cat)")
+    species: str = Field(..., min_length=1, max_length=50, description="Species (e.g. dog, cat)")
     breed: str | None = Field(default=None, max_length=100)
-    sex: str | None = Field(default=None, description="M, F vb.")
+    sex: str | None = Field(default=None, description="M, F, etc.")
     date_of_birth: date | None = None
-    weight_kg: float | None = Field(default=None, ge=0, le=500, description="Ağırlık (kg)")
-    microchip: str | None = Field(default=None, max_length=50, description="Mikroçip numarası")
+    weight_kg: float | None = Field(default=None, ge=0, le=500, description="Weight (kg)")
+    microchip: str | None = Field(default=None, max_length=50, description="Microchip number")
     vaccine_history: list[VaccineEntry] = Field(
         default_factory=list,
-        description="Aşı geçmişi: hangi aşı, hangi tarih",
+        description="Vaccination history: which vaccine, which date",
     )
     notes: str | None = Field(default=None, max_length=2000)
-    card_color: str | None = Field(default=None, max_length=20, description="Kart rengi (hex veya isim)")
-    avatar_emoji: str | None = Field(default=None, max_length=10, description="Profil emojisi (örn. 🐕 🐈)")
+    card_color: str | None = Field(default=None, max_length=20, description="Card color (hex or name)")
+    avatar_emoji: str | None = Field(default=None, max_length=10, description="Profile emoji (e.g. 🐕 🐈)")
     image_url: str | None = Field(default=None, max_length=2000, description="Optional photo URL (http/https only)")
 
 
 class PetCreate(PetBase):
     owner_id: str | None = Field(
         default=None,
-        description="Evcil hayvan sahibi kullanıcı ID'si; pet owner panelinde otomatik doldurulur.",
+        description="Pet owner user ID; auto-filled in the pet owner panel.",
     )
 
 
@@ -70,7 +70,7 @@ class PetInDB(PetBase):
 
 
 class PetPublic(PetInDB):
-    """API'de dönen pet; vet listesinde sahip bilgisi doldurulur."""
+    """Pet returned by the API; owner information is filled in within the vet list."""
     owner_email: str | None = None
     owner_name: str | None = None
 

@@ -1,1 +1,1 @@
-"""Uygulama HTTP middleware'leri."""
+"""Application HTTP middleware."""

@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class UserBase(BaseModel):
     email: EmailStr
-    role: str = Field(pattern="^(vet|pet_owner|admin)$", description="Kullanıcı rolü")
+    role: str = Field(pattern="^(vet|pet_owner|admin)$", description="User role")
 
 
 class UserCreate(UserBase):

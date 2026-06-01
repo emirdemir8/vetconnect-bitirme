@@ -15,9 +15,9 @@ def record_audit(
     target_id: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Hassas/yetkili işlemleri audit_logs koleksiyonuna yazar.
+    """Writes sensitive/privileged operations to the audit_logs collection.
 
-    Denetim kaydı asla ana iş akışını bozmamalı; hata olursa sessizce yutulur.
+    An audit record must never break the main workflow; errors are silently swallowed.
     """
     try:
         db = get_db()
